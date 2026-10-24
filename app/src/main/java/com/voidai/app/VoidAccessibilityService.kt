@@ -22,6 +22,33 @@ class VoidAccessibilityService : AccessibilityService() {
     override fun onInterrupt() {}
     override fun onDestroy() { if (instance === this) instance = null; super.onDestroy() }
 
+    fun visibleText(): String {
+        val root = rootInActiveWindow ?: return "ماكو شاشة قابلة للقراءة حالياً"
+        val out = StringBuilder()
+        var count = 0
+        fun walk(node: AccessibilityNodeInfo, depth: Int) {
+            if (count >= 100 || out.length >= 6000 || depth > 18) return
+            val text = node.text?.toString()?.trim().orEmpty()
+            val desc = node.contentDescription?.toString()?.trim().orEmpty()
+            if (text.isNotBlank() || desc.isNotBlank()) {
+                val label = (if (text.isNotBlank()) text else desc).replace("\n", " ")
+                out.append("- ").append(label.take(180))
+                    .append(" [clickable=").append(node.isClickable)
+                    .append(", editable=").append(node.isEditable)
+                    .append(", password=").append(node.isPassword)
+                    .append(", scrollable=").append(node.isScrollable).append("]\n")
+                count++
+            }
+            for (i in 0 until node.childCount) {
+                val child = node.getChild(i) ?: continue
+                walk(child, depth + 1)
+                if (count >= 100 || out.length >= 6000) break
+            }
+        }
+        walk(root, 0)
+        return if (out.isBlank()) "الشاشة الحالية لا تعرض نصوصاً يمكن قراءتها." else out.toString()
+    }
+
     fun clickText(text: String): Boolean {
         if (text.isBlank()) return false
         val roots = listOfNotNull(rootInActiveWindow)
