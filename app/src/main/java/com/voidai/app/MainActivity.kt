@@ -5,6 +5,8 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import androidx.core.app.ActivityCompat
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
@@ -53,6 +55,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             VoidAiApp(
                 onCommand = { runCommand(it) },
                 onAskAI = { question, callback -> askGemini(question, callback) },
+                onRunAgent = { goal, callback -> runAgentTask(goal, callback) },
                 onSaveApiKey = { key -> getSharedPreferences("void_ai", MODE_PRIVATE).edit().putString("gemini_api_key", key.trim()).apply() },
                 hasApiKey = { !getSharedPreferences("void_ai", MODE_PRIVATE).getString("gemini_api_key", "").isNullOrBlank() },
                 onListen = { callback -> startListening(callback) },
@@ -96,7 +99,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         recognizer.startListening(intent)
     }
 
-    private fun askGemini(question: String, callback: (String) -> Unit) {
+    private fun askGemini(question: String, callback: (String) -> Unit, speakAnswer: Boolean = true) {
         val key = getSharedPreferences("void_ai", MODE_PRIVATE).getString("gemini_api_key", "").orEmpty()
         if (key.isBlank()) { callback("اضغط ربط AI وأضف مفتاح Gemini API أولاً."); return }
         Thread {
@@ -116,8 +119,117 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                 connection.disconnect()
                 if (code !in 200..299) "Gemini رفض الطلب (HTTP $code). تأكد من المفتاح وتفعيله." else JSONObject(raw).optJSONArray("candidates")?.optJSONObject(0)?.optJSONObject("content")?.optJSONArray("parts")?.optJSONObject(0)?.optString("text")?.takeIf { it.isNotBlank() } ?: "ما وصلني رد واضح من Gemini."
             } catch (_: Exception) { "تعذر الاتصال بـ Gemini. تأكد من الإنترنت وصحة المفتاح." }
-            runOnUiThread { callback(answer); say(answer) }
+            runOnUiThread { callback(answer); if (speakAnswer) say(answer) }
         }.start()
+    }
+
+    private fun installedAppLabels(): List<Pair<String, String>> {
+        return try {
+            val launchIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+            packageManager.queryIntentActivities(launchIntent, 0)
+                .map { info -> info.loadLabel(packageManager).toString() to info.activityInfo.packageName }
+                .distinctBy { it.second }
+                .sortedBy { it.first.lowercase(Locale.ROOT) }
+                .take(120)
+        } catch (_: Exception) { emptyList() }
+    }
+
+    private fun launchAppByLabel(name: String): Boolean {
+        val wanted = name.trim().lowercase(Locale.ROOT).replace(" ", "")
+        if (wanted.isBlank()) return false
+        val match = installedAppLabels().firstOrNull { (label, _) ->
+            val candidate = label.lowercase(Locale.ROOT).replace(" ", "")
+            candidate == wanted || candidate.contains(wanted) || (wanted.length > 3 && wanted.contains(candidate) && candidate.length > 3)
+        } ?: return false
+        val intent = packageManager.getLaunchIntentForPackage(match.second) ?: return false
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        return try { startActivity(intent); true } catch (_: Exception) { false }
+    }
+
+    private fun runAgentTask(goal: String, callback: (String) -> Unit) {
+        val history = mutableListOf<String>()
+        val handler = Handler(Looper.getMainLooper())
+        fun step(index: Int) {
+            if (index >= 14) {
+                callback("وصلت حد خطوات التنفيذ الآمنة. اللي تم لحد الآن: " +
+                    if (history.isEmpty()) "ما نفّذت خطوة." else history.takeLast(5).joinToString("، ") +
+                    ". گدر تكلي أكمل من الشاشة الحالية.")
+                return
+            }
+            val service = VoidAccessibilityService.instance
+            val screen = service?.visibleText() ?: "خدمة التحكم بالشاشة غير مفعلة. يمكن فتح تطبيق فقط، لكن قراءة الشاشة والنقر والكتابة تحتاج تفعيل خدمة VOID AI من تسهيلات الاستخدام."
+            val apps = installedAppLabels().joinToString(", ") { it.first }.take(4500)
+            val prompt = listOf(
+                "أنت وكيل تحكم محلي داخل VOID AI على أندرويد. المطلوب من المستخدم: " + goal,
+                "الخطوات المنفذة سابقاً: " + history.joinToString(" | ").ifBlank { "لا توجد" },
+                "الشاشة الحالية:
+" + screen,
+                "التطبيقات المثبتة التي يمكن فتحها:
+" + apps,
+                """قرر خطوة واحدة فقط حسب الشاشة والمطلوب، ثم أعد JSON صالحاً فقط بالشكل:
+{"action":"open_app|click|type|scroll_down|scroll_up|back|home|wait|done|needs_confirmation","target":"","text":"","message":""}
+القواعد:
+- إذا كان المطلوب سؤالاً أو دردشة وليس تحكماً بالجهاز، أجب عبر action=done و message.
+- نفذ خطوة واحدة كل مرة؛ بعد كل خطوة ستصلك حالة الشاشة الجديدة.
+- open_app: target اسم التطبيق المثبت كما يظهر بالقائمة.
+- click: target نص زر أو تبويب ظاهر حرفياً أو قريب جداً منه.
+- type: text النص الذي طلب المستخدم كتابته، فقط بعد وجود حقل تحرير مناسب ومحدد. لا تكتب كلمات مرور أو رموز تحقق أو مفاتيح API أو بيانات بطاقة أو معلومات مالية حساسة.
+- scroll_down / scroll_up / back / home / wait لا تحتاج target أو text.
+- لا تدّع نجاح خطوة إذا لم تظهر علامة نجاح.
+- لا ترسل رسائل، ولا تنشر، ولا تحذف ملفات أو حسابات، ولا تشتري أو تدفع، ولا تغيّر إعدادات أمنية؛ استخدم needs_confirmation واطلب من المستخدم تنفيذ التأكيد بنفسه.
+- لا تتجاوز شاشة تسجيل دخول أو حماية، ولا تحاول تخطي قيود التطبيقات.
+- إذا الخدمة غير مفعلة، أو التطبيق لا يوفر عناصر مقروءة، أو لا تستطيع تحديد الخطوة بثقة، أوقف المهمة برسالة واضحة action=done.
+- عند اكتمال المهمة أعد action=done ورسالة عربية قصيرة وصادقة.
+- لا تستخدم Markdown أو code fences؛ أعد كائن JSON واحداً فقط."""
+            ).joinToString("
+
+")
+            askGemini(prompt, { raw ->
+                val parsed = try {
+                    val start = raw.indexOf('{')
+                    val end = raw.lastIndexOf('}')
+                    if (start >= 0 && end > start) JSONObject(raw.substring(start, end + 1)) else null
+                } catch (_: Exception) { null }
+                if (parsed == null) {
+                    callback(raw)
+                    return@askGemini
+                }
+                val action = parsed.optString("action", "done").lowercase(Locale.ROOT)
+                val target = parsed.optString("target", "")
+                val textValue = parsed.optString("text", "")
+                val message = parsed.optString("message", "")
+                if (action == "done") {
+                    callback(message.ifBlank { "وقفت هنا حتى ما أنفذ خطوة غير مؤكدة." })
+                    return@askGemini
+                }
+                if (action == "needs_confirmation") {
+                    callback(message.ifBlank { "هذي الخطوة تحتاج تأكيد منك داخل التطبيق؛ ما نفذتها." })
+                    return@askGemini
+                }
+                val success = when (action) {
+                    "open_app" -> launchAppByLabel(target)
+                    "click" -> VoidAccessibilityService.instance?.clickText(target) == true
+                    "type" -> VoidAccessibilityService.instance?.setFocusedText(textValue) == true
+                    "scroll_down" -> VoidAccessibilityService.instance?.scroll(false) == true
+                    "scroll_up" -> VoidAccessibilityService.instance?.scroll(true) == true
+                    "back" -> VoidAccessibilityService.instance?.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK) == true
+                    "home" -> VoidAccessibilityService.instance?.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_HOME) == true
+                    "wait" -> true
+                    else -> false
+                }
+                if (!success) {
+                    callback("ما قدرت أنفذ الخطوة «" + (if (target.isNotBlank()) target else action) + "». تأكد من تفعيل خدمة التحكم وأن العنصر ظاهر بالشاشة، أو نفّذ هالخطوة يدوياً.")
+                    return@askGemini
+                }
+                history.add(action + if (target.isNotBlank()) "(" + target + ")" else if (textValue.isNotBlank()) "(نص)" else "")
+                handler.postDelayed({ step(index + 1) }, if (action == "wait") 1300L else 900L)
+            }, speakAnswer = false)
+        }
+        if (getSharedPreferences("void_ai", MODE_PRIVATE).getString("gemini_api_key", "").isNullOrBlank()) {
+            callback("اربط Gemini API أولاً من زر «ربط AI» حتى أقدر أخطط للخطوات.")
+            return
+        }
+        step(0)
     }
 
     private fun runCommand(raw: String): String {
@@ -157,7 +269,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                 if (VoidAccessibilityService.instance?.setFocusedText(raw.removePrefix("اكتب ").trim()) == true) "كتبت النص بالحقل المحدد" else "اضغط أولاً داخل حقل كتابة وفعّل خدمة VOID AI"
             else -> "أكدر أنفذ أوامر محددة حالياً: افتح يوتيوب، واتساب، تيليجرام، الكاميرا، الإعدادات، الواي فاي، أوامر رجوع/الرئيسية/تمرير، واضغط [اسم العنصر] أو اكتب [نص]. أوامر الذكاء الاصطناعي العامة تحتاج ربط محرك AI."
         }
-        say(result)
+        if (!result.startsWith("أكدر أنفذ أوامر محددة حالياً")) say(result)
         return result
     }
 
@@ -177,6 +289,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 private fun VoidAiApp(
     onCommand: (String) -> String,
     onAskAI: (String, (String) -> Unit) -> Unit,
+    onRunAgent: (String, (String) -> Unit) -> Unit,
     onSaveApiKey: (String) -> Unit,
     hasApiKey: () -> Boolean,
     onListen: ((String) -> Unit) -> Unit,
@@ -199,7 +312,11 @@ private fun VoidAiApp(
         val response = onCommand(text)
         if (response.startsWith("أكدر أنفذ أوامر محددة حالياً")) {
             thinking = true
-            onAskAI(text) { aiResponse -> messages = messages + ChatLine(aiResponse, false); thinking = false }
+            onRunAgent(text) { aiResponse ->
+                messages = messages + ChatLine(aiResponse, false)
+                thinking = false
+                onSpeak(aiResponse)
+            }
         } else messages = messages + ChatLine(response, false)
     }
     MaterialTheme(colorScheme = darkColorScheme(background = bg, surface = panel, primary = cyan)) {
