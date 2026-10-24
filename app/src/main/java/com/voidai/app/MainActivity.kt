@@ -30,6 +30,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -333,9 +334,9 @@ private fun VoidAiApp(
         } else messages = messages + ChatLine(response, false)
     }
     MaterialTheme(colorScheme = darkColorScheme(background = bg, surface = panel, primary = cyan)) {
-        Column(Modifier.fillMaxSize().background(bg).padding(16.dp)) {
+        Column(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF070A11), Color(0xFF0E1B2A), Color(0xFF080B12)))).padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(44.dp).background(cyan, RoundedCornerShape(14.dp)), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(44.dp).background(Brush.linearGradient(listOf(cyan, Color(0xFF8B5CF6))), RoundedCornerShape(14.dp)), contentAlignment = Alignment.Center) {
                     Text("V", color = bg, fontSize = 25.sp, fontWeight = FontWeight.Black)
                 }
                 Spacer(Modifier.width(12.dp))
@@ -391,7 +392,7 @@ private fun VoidAiApp(
                 IconButton(onClick = { submit(input) }) { Icon(Icons.Default.Send, contentDescription = "إرسال", tint = cyan) }
             }
             Spacer(Modifier.height(5.dp))
-            Text("الذكاء الاصطناعي يحتاج إنترنت ومفتاح Gemini • VOID AI", Modifier.fillMaxWidth(), color = Color.Gray, fontSize = 10.sp, textAlign = TextAlign.Center)
+            Text(if (hasApiKey()) "Gemini محفوظ على الجهاز • اختبر الاتصال عند الحاجة" else "اربط مفتاح Gemini للبدء • VOID AI", Modifier.fillMaxWidth(), color = Color(0xFF8493A8), fontSize = 10.sp, textAlign = TextAlign.Center)
         }
         if (apiDialog) {
             AlertDialog(
