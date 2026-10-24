@@ -162,10 +162,8 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             val prompt = listOf(
                 "أنت وكيل تحكم محلي داخل VOID AI على أندرويد. المطلوب من المستخدم: " + goal,
                 "الخطوات المنفذة سابقاً: " + history.joinToString(" | ").ifBlank { "لا توجد" },
-                "الشاشة الحالية:
-" + screen,
-                "التطبيقات المثبتة التي يمكن فتحها:
-" + apps,
+                "الشاشة الحالية:\n" + screen,
+                "التطبيقات المثبتة التي يمكن فتحها:\n" + apps,
                 """قرر خطوة واحدة فقط حسب الشاشة والمطلوب، ثم أعد JSON صالحاً فقط بالشكل:
 {"action":"open_app|click|type|scroll_down|scroll_up|back|home|wait|done|needs_confirmation","target":"","text":"","message":""}
 القواعد:
@@ -181,9 +179,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 - إذا الخدمة غير مفعلة، أو التطبيق لا يوفر عناصر مقروءة، أو لا تستطيع تحديد الخطوة بثقة، أوقف المهمة برسالة واضحة action=done.
 - عند اكتمال المهمة أعد action=done ورسالة عربية قصيرة وصادقة.
 - لا تستخدم Markdown أو code fences؛ أعد كائن JSON واحداً فقط."""
-            ).joinToString("
-
-")
+            ).joinToString("\n\n")
             askGemini(prompt, { raw ->
                 val parsed = try {
                     val start = raw.indexOf('{')
