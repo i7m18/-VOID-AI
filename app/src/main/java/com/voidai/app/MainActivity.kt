@@ -99,7 +99,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         recognizer.startListening(intent)
     }
 
-    private fun askGemini(question: String, callback: (String) -> Unit, speakAnswer: Boolean = true) {
+    private fun askGemini(question: String, callback: (String) -> Unit, speakAnswer: Boolean = true, agentPrompt: Boolean = false) {
         val key = getSharedPreferences("void_ai", MODE_PRIVATE).getString("gemini_api_key", "").orEmpty()
         if (key.isBlank()) { callback("اضغط ربط AI وأضف مفتاح Gemini API أولاً."); return }
         Thread {
@@ -111,7 +111,10 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                 connection.readTimeout = 30000
                 connection.doOutput = true
                 connection.setRequestProperty("Content-Type", "application/json; charset=utf-8")
-                val body = JSONObject().put("contents", org.json.JSONArray().put(JSONObject().put("parts", org.json.JSONArray().put(JSONObject().put("text", "أنت VOID AI، مساعد عربي ودود. أجب باللهجة العراقية عند ملاءمتها، ولا تدّع تنفيذ أفعال على الجهاز. سؤال المستخدم: " + question)))))
+                val requestText = if (agentPrompt) question else "أنت VOID AI، مساعد عربي ودود. أجب باللهجة العراقية عند ملاءمتها، ولا تدّع تنفيذ أفعال على الجهاز. سؤال المستخدم: " + question
+                val body = JSONObject()
+                    .put("contents", org.json.JSONArray().put(JSONObject().put("parts", org.json.JSONArray().put(JSONObject().put("text", requestText)))))
+                if (agentPrompt) body.put("generationConfig", JSONObject().put("responseMimeType", "application/json").put("temperature", 0.2))
                 connection.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
                 val code = connection.responseCode
                 val stream = if (code in 200..299) connection.inputStream else connection.errorStream
@@ -219,7 +222,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                 }
                 history.add(action + if (target.isNotBlank()) "(" + target + ")" else if (textValue.isNotBlank()) "(نص)" else "")
                 handler.postDelayed({ step(index + 1) }, if (action == "wait") 1300L else 900L)
-            }, speakAnswer = false)
+            }, speakAnswer = false, agentPrompt = true)
         }
         if (getSharedPreferences("void_ai", MODE_PRIVATE).getString("gemini_api_key", "").isNullOrBlank()) {
             callback("اربط Gemini API أولاً من زر «ربط AI» حتى أقدر أخطط للخطوات.")
