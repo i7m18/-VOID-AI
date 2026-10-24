@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">VOID AI</string>
+    <string name="accessibility_service_description">تسمح لـ VOID AI بتنفيذ أوامرك على الشاشة مثل النقر والكتابة والتمرير. فعّلها فقط إذا كنت تريد هذه الوظائف.</string>
+</resources>
