@@ -345,9 +345,27 @@ private fun VoidAiApp(
                 }
             }
             Spacer(Modifier.height(12.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = onAccessibility, modifier = Modifier.weight(1f)) { Text("التحكم بالشاشة") }
-                OutlinedButton(onClick = { apiKeyInput = ""; apiDialog = true }) { Text(if (hasApiKey()) "ربط AI ✓" else "ربط AI 🔑") }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Button(onClick = onAccessibility, modifier = Modifier.weight(1.15f), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 10.dp)) { Text("التحكم", fontSize = 12.sp) }
+                OutlinedButton(onClick = { apiKeyInput = ""; apiDialog = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 10.dp)) { Text(if (hasApiKey()) "ربط AI ✓" else "ربط AI 🔑", fontSize = 12.sp) }
+                OutlinedButton(
+                    onClick = {
+                        if (!hasApiKey()) {
+                            messages = messages + ChatLine("اربط مفتاح Gemini أولاً من زر ربط AI.", false)
+                        } else {
+                            thinking = true
+                            onAskAI("أجب بكلمة تم فقط. هذا اختبار اتصال Gemini داخل تطبيق VOID AI.") { answer ->
+                                messages = messages + ChatLine(
+                                    if (answer.startsWith("Gemini رفض") || answer.startsWith("تعذر الاتصال")) "فشل اختبار Gemini: $answer" else "نجح الاتصال بـ Gemini. الرد: $answer",
+                                    false
+                                )
+                                thinking = false
+                            }
+                        }
+                    },
+                    modifier = Modifier.weight(0.9f),
+                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 10.dp)
+                ) { Text("اختبار", fontSize = 12.sp) }
             }
             if (thinking) Text("VOID AI يفكر...", color = cyan, fontSize = 13.sp)
             Spacer(Modifier.height(12.dp))
