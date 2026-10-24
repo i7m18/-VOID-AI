@@ -104,7 +104,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         if (key.isBlank()) { callback("اضغط ربط AI وأضف مفتاح Gemini API أولاً."); return }
         Thread {
             val answer = try {
-                val endpoint = URL("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + java.net.URLEncoder.encode(key, "UTF-8"))
+                val endpoint = URL("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=" + java.net.URLEncoder.encode(key, "UTF-8"))
                 val connection = endpoint.openConnection() as HttpURLConnection
                 connection.requestMethod = "POST"
                 connection.connectTimeout = 20000
@@ -114,13 +114,27 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                 val requestText = if (agentPrompt) question else "أنت VOID AI، مساعد عربي ودود. أجب باللهجة العراقية عند ملاءمتها، ولا تدّع تنفيذ أفعال على الجهاز. سؤال المستخدم: " + question
                 val body = JSONObject()
                     .put("contents", org.json.JSONArray().put(JSONObject().put("parts", org.json.JSONArray().put(JSONObject().put("text", requestText)))))
-                if (agentPrompt) body.put("generationConfig", JSONObject().put("responseMimeType", "application/json").put("temperature", 0.2))
+                if (agentPrompt) body.put("generationConfig", JSONObject().put("responseMimeType", "application/json"))
                 connection.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
                 val code = connection.responseCode
                 val stream = if (code in 200..299) connection.inputStream else connection.errorStream
                 val raw = stream.bufferedReader(Charsets.UTF_8).use { it.readText() }
                 connection.disconnect()
-                if (code !in 200..299) "Gemini رفض الطلب (HTTP $code). تأكد من المفتاح وتفعيله." else JSONObject(raw).optJSONArray("candidates")?.optJSONObject(0)?.optJSONObject("content")?.optJSONArray("parts")?.optJSONObject(0)?.optString("text")?.takeIf { it.isNotBlank() } ?: "ما وصلني رد واضح من Gemini."
+                if (code !in 200..299) {
+                    val detail = try { JSONObject(raw).optJSONObject("error")?.optString("message").orEmpty() } catch (_: Exception) { "" }
+                    val reason = detail.ifBlank { raw.take(240) }
+                    when (code) {
+                        400 -> "Gemini رفض صيغة الطلب (400): $reason"
+                        401 -> "مفتاح Gemini غير صحيح أو منتهي (401). افتح ربط AI واحفظ مفتاحاً صالحاً. التفاصيل: $reason"
+                        403 -> "المفتاح أو مشروع Google لا يملك صلاحية Gemini API (403). راجع صلاحيات المفتاح وحالة المشروع. التفاصيل: $reason"
+                        404 -> "نموذج Gemini غير موجود أو غير متاح لهذا المشروع (404). حدّث التطبيق أو تحقق من دعم النموذج للمفتاح. التفاصيل: $reason"
+                        429 -> "تم تجاوز حصة الاستخدام أو عدد الطلبات (429). جرّب لاحقاً أو راجع الحصة. التفاصيل: $reason"
+                        else -> "Gemini رفض الطلب (HTTP $code): $reason"
+                    }
+                } else {
+                    val parts = JSONObject(raw).optJSONArray("candidates")?.optJSONObject(0)?.optJSONObject("content")?.optJSONArray("parts")
+                    (0 until (parts?.length() ?: 0)).mapNotNull { i -> parts?.optJSONObject(i)?.optString("text")?.takeIf { !it.isNullOrBlank() } }.joinToString("\\n").ifBlank { "ما وصلني رد واضح من Gemini." }
+                }
             } catch (_: Exception) { "تعذر الاتصال بـ Gemini. تأكد من الإنترنت وصحة المفتاح." }
             runOnUiThread { callback(answer); if (speakAnswer) say(answer) }
         }.start()
