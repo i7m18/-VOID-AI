@@ -133,7 +133,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                     }
                 } else {
                     val parts = JSONObject(raw).optJSONArray("candidates")?.optJSONObject(0)?.optJSONObject("content")?.optJSONArray("parts")
-                    (0 until (parts?.length() ?: 0)).mapNotNull { i -> parts?.optJSONObject(i)?.optString("text")?.takeIf { !it.isNullOrBlank() } }.joinToString("\\n").ifBlank { "ما وصلني رد واضح من Gemini." }
+                    (0 until (parts?.length() ?: 0)).mapNotNull { i -> parts?.optJSONObject(i)?.optString("text")?.takeIf { !it.isNullOrBlank() } }.joinToString("\n").ifBlank { "ما وصلني رد واضح من Gemini." }
                 }
             } catch (_: Exception) { "تعذر الاتصال بـ Gemini. تأكد من الإنترنت وصحة المفتاح." }
             runOnUiThread { callback(answer); if (speakAnswer) say(answer) }
@@ -356,7 +356,7 @@ private fun VoidAiApp(
                             thinking = true
                             onAskAI("أجب بكلمة تم فقط. هذا اختبار اتصال Gemini داخل تطبيق VOID AI.") { answer ->
                                 messages = messages + ChatLine(
-                                    if (answer.startsWith("Gemini رفض") || answer.startsWith("تعذر الاتصال")) "فشل اختبار Gemini: $answer" else "نجح الاتصال بـ Gemini. الرد: $answer",
+                                    if (listOf("Gemini رفض", "تعذر الاتصال", "مفتاح Gemini", "المفتاح أو مشروع", "نموذج Gemini", "تم تجاوز حصة", "طلب Gemini", "اربط Gemini").any { answer.startsWith(it) }) "فشل اختبار Gemini: $answer" else "نجح الاتصال بـ Gemini. الرد: $answer",
                                     false
                                 )
                                 thinking = false
