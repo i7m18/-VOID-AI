@@ -7,7 +7,7 @@
         <package android:name="org.telegram.messenger" />
         <package android:name="com.android.chrome" />
     </queries>
-    <application android:allowBackup="true" android:label="VOID AI" android:supportsRtl="true" android:theme="@android:style/Theme.Material.Light.NoActionBar">
+    <application android:icon="@drawable/void_logo" android:roundIcon="@drawable/void_logo" android:allowBackup="true" android:label="VOID AI" android:supportsRtl="true" android:theme="@android:style/Theme.Material.Light.NoActionBar">
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
         </activity>
