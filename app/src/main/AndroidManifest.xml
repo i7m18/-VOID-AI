@@ -6,6 +6,10 @@
         <package android:name="com.whatsapp" />
         <package android:name="org.telegram.messenger" />
         <package android:name="com.android.chrome" />
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
     </queries>
     <application android:icon="@drawable/void_logo" android:roundIcon="@drawable/void_logo" android:allowBackup="true" android:label="VOID AI" android:supportsRtl="true" android:theme="@android:style/Theme.Material.Light.NoActionBar">
         <activity android:name=".MainActivity" android:exported="true">
