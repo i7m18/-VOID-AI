@@ -33,6 +33,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.util.Locale
+import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
 
 private data class ChatLine(val text: String, val fromUser: Boolean)
 
@@ -49,6 +52,9 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         setContent {
             VoidAiApp(
                 onCommand = { runCommand(it) },
+                onAskAI = { question, callback -> askGemini(question, callback) },
+                onSaveApiKey = { key -> getSharedPreferences("void_ai", MODE_PRIVATE).edit().putString("gemini_api_key", key.trim()).apply() },
+                hasApiKey = { !getSharedPreferences("void_ai", MODE_PRIVATE).getString("gemini_api_key", "").isNullOrBlank() },
                 onListen = { callback -> startListening(callback) },
                 onSpeak = { say(it) },
                 onAccessibility = { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
@@ -88,6 +94,30 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             putExtra(RecognizerIntent.EXTRA_PROMPT, "احچي الأمر هسه")
         }
         recognizer.startListening(intent)
+    }
+
+    private fun askGemini(question: String, callback: (String) -> Unit) {
+        val key = getSharedPreferences("void_ai", MODE_PRIVATE).getString("gemini_api_key", "").orEmpty()
+        if (key.isBlank()) { callback("اضغط ربط AI وأضف مفتاح Gemini API أولاً."); return }
+        Thread {
+            val answer = try {
+                val endpoint = URL("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + java.net.URLEncoder.encode(key, "UTF-8"))
+                val connection = endpoint.openConnection() as HttpURLConnection
+                connection.requestMethod = "POST"
+                connection.connectTimeout = 20000
+                connection.readTimeout = 30000
+                connection.doOutput = true
+                connection.setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                val body = JSONObject().put("contents", org.json.JSONArray().put(JSONObject().put("parts", org.json.JSONArray().put(JSONObject().put("text", "أنت VOID AI، مساعد عربي ودود. أجب باللهجة العراقية عند ملاءمتها، ولا تدّع تنفيذ أفعال على الجهاز. سؤال المستخدم: " + question)))))
+                connection.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
+                val code = connection.responseCode
+                val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+                val raw = stream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+                connection.disconnect()
+                if (code !in 200..299) "Gemini رفض الطلب (HTTP $code). تأكد من المفتاح وتفعيله." else JSONObject(raw).optJSONArray("candidates")?.optJSONObject(0)?.optJSONObject("content")?.optJSONArray("parts")?.optJSONObject(0)?.optString("text")?.takeIf { it.isNotBlank() } ?: "ما وصلني رد واضح من Gemini."
+            } catch (_: Exception) { "تعذر الاتصال بـ Gemini. تأكد من الإنترنت وصحة المفتاح." }
+            runOnUiThread { callback(answer); say(answer) }
+        }.start()
     }
 
     private fun runCommand(raw: String): String {
@@ -146,6 +176,9 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 @Composable
 private fun VoidAiApp(
     onCommand: (String) -> String,
+    onAskAI: (String, (String) -> Unit) -> Unit,
+    onSaveApiKey: (String) -> Unit,
+    hasApiKey: () -> Boolean,
     onListen: ((String) -> Unit) -> Unit,
     onSpeak: (String) -> Unit,
     onAccessibility: () -> Unit
@@ -155,12 +188,19 @@ private fun VoidAiApp(
     val cyan = Color(0xFF47E6D2)
     var input by remember { mutableStateOf("") }
     var listening by remember { mutableStateOf(false) }
+    var apiDialog by remember { mutableStateOf(false) }
+    var apiKeyInput by remember { mutableStateOf("") }
+    var thinking by remember { mutableStateOf(false) }
     var messages by remember { mutableStateOf(listOf(ChatLine("أهلاً بيك، أني VOID AI. أگدر أفتح تطبيقات وأتعامل ويا أوامر محددة. للتحكم بالشاشة فعّل خدمة تسهيلات الاستخدام من الزر أدناه.", false))) }
     fun submit(text: String) {
         if (text.isBlank()) return
-        val response = onCommand(text)
-        messages = messages + ChatLine(text, true) + ChatLine(response, false)
+        messages = messages + ChatLine(text, true)
         input = ""
+        val response = onCommand(text)
+        if (response.startsWith("أكدر أنفذ أوامر محددة حالياً")) {
+            thinking = true
+            onAskAI(text) { aiResponse -> messages = messages + ChatLine(aiResponse, false); thinking = false }
+        } else messages = messages + ChatLine(response, false)
     }
     MaterialTheme(colorScheme = darkColorScheme(background = bg, surface = panel, primary = cyan)) {
         Column(Modifier.fillMaxSize().background(bg).padding(16.dp)) {
@@ -175,7 +215,11 @@ private fun VoidAiApp(
                 }
             }
             Spacer(Modifier.height(12.dp))
-            Button(onClick = onAccessibility, modifier = Modifier.fillMaxWidth()) { Text("تفعيل التحكم بالشاشة") }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = onAccessibility, modifier = Modifier.weight(1f)) { Text("التحكم بالشاشة") }
+                OutlinedButton(onClick = { apiKeyInput = ""; apiDialog = true }) { Text(if (hasApiKey()) "ربط AI ✓" else "ربط AI 🔑") }
+            }
+            if (thinking) Text("VOID AI يفكر...", color = cyan, fontSize = 13.sp)
             Spacer(Modifier.height(12.dp))
             Surface(color = panel, shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth().weight(1f)) {
                 LazyColumn(Modifier.fillMaxSize().padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -199,7 +243,21 @@ private fun VoidAiApp(
                 IconButton(onClick = { submit(input) }) { Icon(Icons.Default.Send, contentDescription = "إرسال", tint = cyan) }
             }
             Spacer(Modifier.height(5.dp))
-            Text("أوامر الجهاز تحتاج تفعيل الخدمة يدوياً • VOID AI", Modifier.fillMaxWidth(), color = Color.Gray, fontSize = 10.sp, textAlign = TextAlign.Center)
+            Text("الذكاء الاصطناعي يحتاج إنترنت ومفتاح Gemini • VOID AI", Modifier.fillMaxWidth(), color = Color.Gray, fontSize = 10.sp, textAlign = TextAlign.Center)
+        }
+        if (apiDialog) {
+            AlertDialog(
+                onDismissRequest = { apiDialog = false },
+                title = { Text("ربط VOID AI مع Gemini") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("الصق مفتاح API. يُحفظ على هذا الجهاز داخل بيانات التطبيق، لكنه غير مشفّر؛ لا تشاركه.")
+                        OutlinedTextField(value = apiKeyInput, onValueChange = { apiKeyInput = it }, label = { Text("Gemini API key") }, singleLine = true, visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation())
+                    }
+                },
+                confirmButton = { TextButton(onClick = { if (apiKeyInput.isNotBlank()) { onSaveApiKey(apiKeyInput); apiDialog = false; apiKeyInput = "" } }) { Text("حفظ المفتاح") } },
+                dismissButton = { TextButton(onClick = { apiDialog = false }) { Text("إلغاء") } }
+            )
         }
     }
 }
