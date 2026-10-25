@@ -233,7 +233,7 @@ func _add_structure(pos: Vector3,size: Vector3,color: Color) -> void:
 func _spawn_player() -> void:
  player = CharacterBody3D.new()
  player.name = "Player"
- player.position = Vector3(0,1.1,18)
+ player.position = Vector3(3,1.1,16)
  player.set_script(PlayerScript)
  world_root.add_child(player)
 
