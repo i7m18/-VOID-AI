@@ -84,7 +84,7 @@ jobs:
           test -s fps-game/assets/weapons/compact_smg.glb
           test -s fps-game/assets/weapons/sniper_rifle.glb
 
-      - name: Download CC0 soldier models and combat sound effects
+      - name: Download CC0 soldier models and generate combat audio
         shell: bash
         run: |
           mkdir -p fps-game/assets/characters fps-game/assets/audio
@@ -92,10 +92,65 @@ jobs:
             curl -L --fail --retry 3 "https://raw.githubusercontent.com/Hidencod/tge-assets/main/packs/mini-characters/${model}.glb" -o "fps-game/assets/characters/${model}.glb"
             test -s "fps-game/assets/characters/${model}.glb"
           done
-          curl -L --fail --retry 3 'https://raw.githubusercontent.com/petroulacl/fps-asset-kit/main/sfx/gunshots/game_gunshot.wav' -o fps-game/assets/audio/rifle_shot.wav
-          curl -L --fail --retry 3 'https://raw.githubusercontent.com/petroulacl/fps-asset-kit/main/sfx/gunshots/sniper_shot.wav' -o fps-game/assets/audio/sniper_shot.wav
+          python3 - <<'PY'
+          import math, random, struct, wave
+          from pathlib import Path
+
+          OUT = Path("fps-game/assets/audio")
+          OUT.mkdir(parents=True, exist_ok=True)
+          RATE = 22050
+          random.seed(81240)
+
+          def write_sound(filename, duration, mode):
+              total = int(RATE * duration)
+              samples = []
+              noise_state = 0.0
+              for i in range(total):
+                  t = i / RATE
+                  noise = random.uniform(-1.0, 1.0)
+                  noise_state = noise_state * 0.20 + noise * 0.80
+                  if mode == "sniper":
+                      crack = 0.95 * math.exp(-((t - 0.004) / 0.0022) ** 2)
+                      body = 0.72 * math.sin(2 * math.pi * 54 * t) * math.exp(-t * 7.5)
+                      report = 0.52 * noise_state * math.exp(-t * 16.0)
+                      echo = 0.0
+                      for delay, gain in ((0.095, 0.26), (0.17, 0.14), (0.29, 0.06)):
+                          dt = t-delay
+                          if dt >= 0:
+                              echo += gain * math.sin(2 * math.pi * 67 * dt) * math.exp(-dt * 11.0)
+                      value = crack + body + report + echo
+                  elif mode == "explosion":
+                      crack = 0.58 * math.exp(-((t - 0.008) / 0.006) ** 2)
+                      body = 0.95 * math.sin(2 * math.pi * (43 + 10 * math.exp(-t*6)) * t) * math.exp(-t * 5.4)
+                      report = 0.62 * noise_state * math.exp(-t * 8.0)
+                      rumble = 0.30 * math.sin(2 * math.pi * 27 * t) * math.exp(-t*3.3)
+                      value = crack + body + report + rumble
+                  else:
+                      crack = 0.85 * math.exp(-((t - 0.003) / 0.0018) ** 2)
+                      body = 0.52 * math.sin(2 * math.pi * 82 * t) * math.exp(-t * 20.0)
+                      report = 0.72 * noise_state * math.exp(-t * 31.0)
+                      echo = 0.0
+                      for delay, gain in ((0.035, 0.18), (0.064, 0.08)):
+                          dt = t-delay
+                          if dt >= 0:
+                              echo += gain * noise_state * math.exp(-dt * 24.0)
+                      value = crack + body + report + echo
+                  value = max(-1.0, min(1.0, value * 0.72))
+                  samples.append(struct.pack("<h", int(value * 32767)))
+              with wave.open(str(OUT / filename), "wb") as wav:
+                  wav.setnchannels(1)
+                  wav.setsampwidth(2)
+                  wav.setframerate(RATE)
+                  wav.writeframes(b"".join(samples))
+
+          write_sound("rifle_shot.wav", 0.22, "rifle")
+          write_sound("sniper_shot.wav", 0.52, "sniper")
+          write_sound("explosion.wav", 0.82, "explosion")
+          PY
+          file fps-game/assets/audio/*.wav
           test -s fps-game/assets/audio/rifle_shot.wav
           test -s fps-game/assets/audio/sniper_shot.wav
+          test -s fps-game/assets/audio/explosion.wav
 
       - name: Configure Android debug signing and Godot SDK paths
         shell: bash
