@@ -83,6 +83,34 @@ class VoidAccessibilityService : AccessibilityService() {
         .replace("ى", "ي").replace("ة", "ه")
         .replace(Regex("[\\s\\p{Punct}،؛:!؟]+"), "")
 
+    fun clickSkipAdIfVisible(): Boolean {
+        val root = rootInActiveWindow ?: return false
+        val adLabels = listOf(
+            "تخطي الإعلان", "تخطي الاعلان", "تخطي الإعلانات", "تخطي الاعلانات",
+            "skip ad", "skip ads", "close ad", "close advertisement",
+            "إغلاق الإعلان", "اغلاق الإعلان", "إغلاق الاعلان", "اغلاق الاعلان"
+        )
+        val matches = mutableListOf<AccessibilityNodeInfo>()
+        fun walk(node: AccessibilityNodeInfo, depth: Int) {
+            if (depth > 20 || matches.size > 250) return
+            val label = listOfNotNull(node.text?.toString(), node.contentDescription?.toString())
+                .joinToString(" ").lowercase(java.util.Locale.ROOT)
+                .replace("أ", "ا").replace("إ", "ا").replace("آ", "ا")
+            if (adLabels.any { label.contains(it.lowercase(java.util.Locale.ROOT)) }) matches.add(node)
+            for (i in 0 until node.childCount) {
+                val child = node.getChild(i) ?: continue
+                walk(child, depth + 1)
+            }
+        }
+        walk(root, 0)
+        for (node in matches) {
+            var target: AccessibilityNodeInfo? = node
+            while (target != null && !target.isClickable) target = target.parent
+            if (target?.performAction(AccessibilityNodeInfo.ACTION_CLICK) == true) return true
+        }
+        return false
+    }
+
     fun setFocusedText(text: String): Boolean {
         val root = rootInActiveWindow ?: return false
         val node = findFocused(root) ?: return false
