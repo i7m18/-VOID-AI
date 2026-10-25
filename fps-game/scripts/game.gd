@@ -2,6 +2,7 @@ extends Node3D
 
 const PlayerScript = preload("res://scripts/player.gd")
 const EnemyScript = preload("res://scripts/enemy.gd")
+const CITY_BUILDING_NAMES := ["building-a","building-b","building-c","building-d","building-e","building-f"]
 const MISSIONS := [
  {"title":"الفصل الأول: صدى الصحراء","brief":"العام 2034. أنت الرقيب آدم الراوي، قائد فريق الاستجابة المعروف باسم الصقر. قبل الفجر بثلاث عشرة دقيقة انقطع بث الحامية الحدودية «الساتر 7». وصل آخر تسجيل صوتي مشوش: ثلاث طلقات، ثم صوت ضابط يقول إنهم يعرفون اسم العملية. وصلت وحدك إلى المحيط لتكتشف أن الحراسة اختفت، والمولد ما زال يعمل، وآثار المركبات تتجه إلى قلب الصحراء لا إلى الحدود. أمّن الموقع واستعد جهاز الاتصال؛ فالذي هاجم الحامية كان يبحث عن شيء محدد، وليس عن معركة عابرة.","radio":"آدم، هنا الملازم ليلى حسن في غرفة العمليات. لا تثق بأي تردد غير مشفر. أرسلنا لك إحداثيات الساتر 7، لكن الإشارة انقطعت قبل أن نعرف من كان يراقبنا.","objective":"أمّن الحامية واستعد الاتصال","enemies":5},
  {"title":"الفصل الثاني: آخر قافلة","brief":"من جهاز الإرسال تستخرج نداء استغاثة يعود إلى قافلة طبية خرجت قبل يومين ولم تصل. تقودك الآثار إلى ممر ضيق بين التلال، حيث احترقت شاحنة الإمداد وبقيت حقيبة إسعافات مفتوحة على الأرض. الناجي الوحيد، سائق اسمه ناصر، يخبرك أن المهاجمين لم يأخذوا الوقود أو الطعام؛ أخذوا صناديق أجهزة اتصال تحمل أرقاماً عسكرية. عليك فتح طريق القافلة وإخراج السائق من الكمين. يصر ناصر على أن المهاجمين كانوا يعرفون وقت المرور بالدقيقة، ما يعني أن جدول التحرك سُرّب من الداخل.","radio":"ليلى: القافلة لم تكن مدرجة في أي بث عام. إذا كان كلام السائق صحيحاً، فهناك شخص يرسل تحركاتنا إلى مجموعة تسمي نفسها الغراب.","objective":"افتح ممر الوادي واحمِ الناجي","enemies":7},
@@ -34,6 +35,7 @@ var menu_panel: PanelContainer
 var move_state := Vector2.ZERO
 var fire_held := false
 var hitmarker_left := 0.0
+var city_asset_index := 0
 
 func _ready() -> void:
  randomize()
@@ -355,8 +357,37 @@ sun.light_energy = 1.25
  world_root.add_child(sun)
 
 func _add_building(pos: Vector3, size: Vector3, color: Color) -> void:
+ # Collision physique indépendante des ressources graphiques importées.
  var body := StaticBody3D.new()
  body.position = pos + Vector3(0,size.y * 0.5,0)
+ var collision := CollisionShape3D.new()
+ var collision_mesh := BoxShape3D.new()
+ collision_mesh.size = size
+ collision.shape = collision_mesh
+ body.add_child(collision)
+ world_root.add_child(body)
+
+ # Les bâtiments Kenney (licence CC0) apportent des silhouettes urbaines détaillées.
+ var model_name: String = CITY_BUILDING_NAMES[city_asset_index % CITY_BUILDING_NAMES.size()]
+ city_asset_index += 1
+ var model_path := "res://assets/buildings/%s.glb" % model_name
+ var packed := load(model_path) as PackedScene
+ if packed != null:
+  var model := packed.instantiate() as Node3D
+  if model != null:
+   world_root.add_child(model)
+   var bounds: Array = []
+   _collect_model_bounds(model,model,bounds)
+   if not bounds.is_empty():
+    var model_bounds: AABB = bounds[0]
+    if model_bounds.size.x > 0.01 and model_bounds.size.y > 0.01 and model_bounds.size.z > 0.01:
+     model.scale = Vector3(size.x/model_bounds.size.x,size.y/model_bounds.size.y,size.z/model_bounds.size.z)
+     model.position = pos - Vector3(model_bounds.position.x*model.scale.x,model_bounds.position.y*model.scale.y,model_bounds.position.z*model.scale.z)
+     model.rotation.y = deg_to_rad(float((city_asset_index * 73) % 360))
+     return
+   model.queue_free()
+
+ # إذا شُغّل المشروع دون اتصال الأصول، استخدم المبنى الإجرائي كخيار احتياطي.
  var shell := MeshInstance3D.new()
  var shell_mesh := BoxMesh.new()
  shell_mesh.size = size
@@ -365,40 +396,41 @@ func _add_building(pos: Vector3, size: Vector3, color: Color) -> void:
  shell_mat.albedo_color = color
  shell_mat.roughness = 0.98
  shell.material_override = shell_mat
- body.add_child(shell)
- var collision := CollisionShape3D.new()
- var collision_mesh := BoxShape3D.new()
- collision_mesh.size = size
- collision.shape = collision_mesh
- body.add_child(collision)
- # نوافذ سوداء وأطر خرسانية تضيف تفاصيل للواجهات.
- var floors := maxi(2, int(size.y / 2.2))
- var columns := maxi(2, int(size.x / 2.7))
- for floor_index in range(floors):
-  for column_index in range(columns):
+ shell.position = pos + Vector3(0,size.y*0.5,0)
+ world_root.add_child(shell)
+ for floor_index in range(maxi(2,int(size.y/2.2))):
+  for column_index in range(maxi(2,int(size.x/2.7))):
    var window_node := MeshInstance3D.new()
    var window_mesh := BoxMesh.new()
    window_mesh.size = Vector3(0.72,0.62,0.07)
    window_node.mesh = window_mesh
    var window_mat := StandardMaterial3D.new()
-   window_mat.albedo_color = Color(0.055,0.075,0.08) if (floor_index+column_index)%3 != 0 else Color(0.16,0.12,0.085)
+   window_mat.albedo_color = Color(0.055,0.075,0.08)
    window_mat.metallic = 0.1
    window_mat.roughness = 0.42
    window_node.material_override = window_mat
-   window_node.position = Vector3(-size.x*0.5 + (float(column_index)+0.7)*size.x/float(columns),
-    -size.y*0.5 + 1.15 + float(floor_index)*size.y/float(floors),
-    -size.z*0.5 - 0.04)
-   body.add_child(window_node)
- var roof_lip := MeshInstance3D.new()
- var lip_mesh := BoxMesh.new()
- lip_mesh.size = Vector3(size.x+0.35,0.18,size.z+0.35)
- roof_lip.mesh = lip_mesh
- roof_lip.position.y = size.y*0.5
- var lip_mat := StandardMaterial3D.new()
- lip_mat.albedo_color = color.darkened(0.22)
- roof_lip.material_override = lip_mat
- body.add_child(roof_lip)
- world_root.add_child(body)
+   window_node.position = Vector3(pos.x-size.x*0.5+(float(column_index)+0.7)*size.x/float(maxi(2,int(size.x/2.7))),
+    pos.y+1.15+float(floor_index)*size.y/float(maxi(2,int(size.y/2.2))),
+    pos.z-size.z*0.5-0.04)
+   world_root.add_child(window_node)
+
+func _collect_model_bounds(root_node: Node3D, current: Node, bounds: Array) -> void:
+ if current is MeshInstance3D:
+  var mesh_instance := current as MeshInstance3D
+  if mesh_instance.mesh != null:
+   var local_bounds := mesh_instance.get_aabb()
+   var relative_transform: Transform3D = root_node.global_transform.affine_inverse() * mesh_instance.global_transform
+   for x in [local_bounds.position.x,local_bounds.end.x]:
+    for y in [local_bounds.position.y,local_bounds.end.y]:
+     for z in [local_bounds.position.z,local_bounds.end.z]:
+      var point: Vector3 = relative_transform * Vector3(x,y,z)
+      if bounds.is_empty():
+       bounds.append(AABB(point,Vector3.ZERO))
+      else:
+       var old_bounds: AABB = bounds[0]
+       bounds[0] = old_bounds.expand(point)
+ for child in current.get_children():
+  _collect_model_bounds(root_node,child,bounds)
 
 func _add_crate(pos: Vector3, color: Color) -> void:
  var crate := MeshInstance3D.new()
