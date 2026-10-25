@@ -55,6 +55,15 @@ jobs:
           unzip -q /tmp/godot-templates.tpz -d /tmp/godot-templates
           cp -a /tmp/godot-templates/templates/. "$HOME/.local/share/godot/export_templates/4.3.stable/"
 
+      - name: Install bundled Arabic UI font
+        shell: bash
+        run: |
+          mkdir -p fps-game/fonts
+          curl -L --fail --retry 3 \\
+            'https://raw.githubusercontent.com/google/fonts/main/ofl/notosansarabic/NotoSansArabic%5Bwdth%2Cwght%5D.ttf' \\
+            -o fps-game/fonts/NotoSansArabic.ttf
+          test -s fps-game/fonts/NotoSansArabic.ttf
+
       - name: Configure Android debug signing and Godot SDK paths
         shell: bash
         run: |
