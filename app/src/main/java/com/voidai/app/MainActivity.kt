@@ -495,6 +495,11 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                 return
             }
             val service = VoidAccessibilityService.instance
+            if (service?.clickSkipAdIfVisible() == true) {
+                history.add("ضغط زر تخطي الإعلان تلقائياً")
+                handler.postDelayed({ step(index + 1) }, 450L)
+                return
+            }
             val screen = (service?.visibleText() ?: "خدمة التحكم بالشاشة غير مفعلة. يمكن فتح تطبيق فقط، لكن قراءة الشاشة والنقر والكتابة تحتاج تفعيل خدمة VOID AI من تسهيلات الاستخدام.").take(2600)
             val apps = installedAppLabels().joinToString(", ") { it.first }.take(1400)
             val prompt = listOf(
