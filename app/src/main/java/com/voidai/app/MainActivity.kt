@@ -181,7 +181,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         if (facts.any { it.equals(fact, ignoreCase = true) }) return "هاي المعلومة محفوظة عندي من قبل."
         facts.add(fact)
         writeUserMemory(facts)
-        return "حفظت المعلومة بذاكرة VOID AI على جهازك. عدد المعلومات المحفوظة: \${facts.size}."
+        return "حفظت المعلومة بذاكرة VOID AI على جهازك. عدد المعلومات المحفوظة: ${facts.size}."
     }
 
     private fun forgetUserFact(rawFact: String): String {
@@ -257,7 +257,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                                 } else {
                                     finalAnswer = when (code) {
                                         400 -> "Gemini رفض صيغة الطلب (400): " + reason
-                                        401 -> "مفتاح Gemini غير صحيح أو منتهي (401). افتح ربط AI واحفظ مفتاحاً صالحاً. التفاصيل: " + reason
+                                        401 -> "رفضت جهة المصادقة الطلب (401). راجع رمز وصول الخادم أو إعدادات مزوّد الذكاء الاصطناعي. التفاصيل: " + reason
                                         403 -> "المفتاح أو مشروع Google لا يملك صلاحية Gemini API (403). التفاصيل: " + reason
                                         404 -> "نموذج Gemini غير موجود أو غير متاح لهذا المشروع (404). التفاصيل: " + reason
                                         else -> "Gemini رفض الطلب (HTTP " + code + "): " + reason
@@ -308,7 +308,6 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                 connection.readTimeout = 360000
                 connection.doOutput = true
                 connection.setRequestProperty("Content-Type", "application/json; charset=utf-8")
-                connection.setRequestProperty("x-goog-api-key", key)
                 val prompt = """
                     Create a polished short vertical 9:16 video based on the user's idea below.
                     Use clear cinematic composition, intentional camera movement, coherent motion,
@@ -404,7 +403,6 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                 connection.readTimeout = 180000
                 connection.doOutput = true
                 connection.setRequestProperty("Content-Type", "application/json; charset=utf-8")
-                connection.setRequestProperty("x-goog-api-key", key)
                 val prompt = """
                     Create a polished original visual design from the user's request below.
                     Pay attention to composition, color harmony, lighting, clean edges, and professional
@@ -939,7 +937,7 @@ private fun VoidAiApp(
                                 thinking = true
                                 testStatus = "أختبر اتصال Gemini..."
                                 onAskAI("أجب بكلمة تم فقط. هذا اختبار اتصال Gemini داخل تطبيق VOID AI.") { answer ->
-                                    val failed = listOf("Gemini رفض", "تعذر الاتصال", "مفتاح Gemini", "المفتاح أو مشروع", "نموذج Gemini", "تم تجاوز حصة", "طلب Gemini", "اربط Gemini", "HTTP 503", "HTTP 429", "عليه ضغط", "وصل حد الطلبات").any { answer.contains(it, ignoreCase = true) }
+                                    val failed = listOf("Gemini رفض", "تعذر الاتصال", "مفتاح Gemini", "رمز وصول الخادم", "رفضت جهة المصادقة", "خادم VOID AI", "المفتاح أو مشروع", "نموذج Gemini", "تم تجاوز حصة", "طلب Gemini", "اربط Gemini", "HTTP 503", "HTTP 429", "عليه ضغط", "وصل حد الطلبات").any { answer.contains(it, ignoreCase = true) }
                                     val line = if (failed) "فشل اختبار Gemini: " + answer else "نجح الاتصال بـ Gemini. الرد: " + answer
                                     messages = messages + ChatLine(line, false)
                                     thinking = false
