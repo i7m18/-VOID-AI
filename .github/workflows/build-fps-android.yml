@@ -60,7 +60,9 @@ jobs:
         run: |
           mkdir -p fps-game/fonts
           curl -L --fail --retry 3 'https://raw.githubusercontent.com/google/fonts/main/ofl/notosansarabic/NotoSansArabic%5Bwdth%2Cwght%5D.ttf' -o fps-game/fonts/NotoSansArabic.ttf
+          curl -L --fail --retry 3 'https://raw.githubusercontent.com/google/fonts/main/ofl/notosansarabic/OFL.txt' -o fps-game/fonts/OFL.txt
           test -s fps-game/fonts/NotoSansArabic.ttf
+          test -s fps-game/fonts/OFL.txt
 
       - name: Configure Android debug signing and Godot SDK paths
         shell: bash
