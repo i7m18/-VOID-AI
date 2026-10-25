@@ -126,7 +126,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         if (key.isBlank()) { callback("اضغط ربط AI وأضف مفتاح Gemini API أولاً."); return }
         Thread {
             val answer = try {
-                val models = listOf("gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite")
+                val models = listOf("gemini-2.5-flash", "gemini-2.0-flash")
                 var finalAnswer = ""
                 var completed = false
                 var lastBusyMessage = "خدمة Gemini مشغولة حالياً."
@@ -140,8 +140,8 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                             val endpoint = URL("https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent?key=" + java.net.URLEncoder.encode(key, "UTF-8"))
                             connection = endpoint.openConnection() as HttpURLConnection
                             connection.requestMethod = "POST"
-                            connection.connectTimeout = 12000
-                            connection.readTimeout = 25000
+                            connection.connectTimeout = 7000
+                            connection.readTimeout = 12000
                             connection.doOutput = true
                             connection.setRequestProperty("Content-Type", "application/json; charset=utf-8")
                             val requestText = if (agentPrompt) question else "أنت VOID AI، مساعد عربي ودود. أجب باللهجة العراقية عند ملاءمتها، ولا تدّع تنفيذ أفعال على الجهاز. سؤال المستخدم: " + question
@@ -500,6 +500,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             val prompt = listOf(
                 "أنت وكيل تحكم محلي داخل VOID AI على أندرويد. المطلوب من المستخدم: " + goal,
                 if (goal.contains("فيديو", true) || goal.contains("مونتاج", true) || goal.contains("CapCut", true)) "مهمة تحرير/تصميم فيديو: لا تعتبر فتح CapCut إنجازاً. افحص الشاشة، أنشئ مشروعاً عند توفر زر واضح، اختر الوسائط التي حدّدها المستخدم فقط، ونفّذ التحرير خطوة بخطوة. لا تخترع وسائط أو تدّع تصدير فيديو إذا لم يحدث فعلاً. إذا احتجت ملفاً أو اختياراً من المستخدم، اطلبه بوضوح." else if (goal.contains("صورة", true) || goal.contains("شعار", true) || goal.contains("بوستر", true) || goal.contains("لوجو", true)) "مهمة تصميم صورة: إذا تعذر التوليد المباشر، جرّب تطبيق تصميم مثبت مثل Canva أو Picsart، ثم تعامل مع عناصر الشاشة خطوة بخطوة. لا تدّع حفظ التصميم ما لم يظهر دليل." else "نفّذ المهمة المطلوبة قدر الإمكان على الشاشة الحالية، ولا تكتفِ بوصف ما ستفعله.",
+                "أولوية إلزامية: إذا ظهرت شاشة إعلان اضغط زر تخطي الإعلان أو Skip Ad أو تخطي أو إغلاق الإعلان أولاً إذا كان قابلاً للنقر. إذا ظهرت شاشة CapCut الرئيسية ابدأ مشروعاً جديداً بالضغط على مشروع جديد أو New project أو علامة + الواضحة، ولا تعتبر فتح التطبيق إنجازاً. إذا ظهرت شاشة اختيار الوسائط فاطلب من المستخدم تحديد الملفات أو اختر فقط الملفات التي طلبها. ",
                 "الخطوات المنفذة سابقاً: " + history.joinToString(" | ").ifBlank { "لا توجد" },
                 "الشاشة الحالية:\n" + screen,
                 "التطبيقات المثبتة التي يمكن فتحها:\n" + apps,
@@ -571,11 +572,11 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                 consecutiveFailures = 0
                 history.add(action + if (target.isNotBlank()) "(" + target + ")" else if (textValue.isNotBlank()) "(نص)" else "")
                 val delayMs = when (action) {
-                    "open_app" -> 1800L
-                    "click" -> 950L
-                    "type" -> 700L
-                    "wait" -> parsed.optInt("wait_ms", 1500).coerceIn(700, 5000).toLong()
-                    else -> 800L
+                    "open_app" -> 1100L
+                    "click" -> 350L
+                    "type" -> 250L
+                    "wait" -> parsed.optInt("wait_ms", 900).coerceIn(350, 2200).toLong()
+                    else -> 250L
                 }
                 handler.postDelayed({ step(index + 1) }, delayMs)
             }, speakAnswer = false, agentPrompt = true)
@@ -686,37 +687,36 @@ private fun VoidAiApp(
         val normalized = text.lowercase(Locale.ROOT)
         val wantsEdit = listOf("مونتاج", "منتاج", "عدّل فيديو", "عدل فيديو", "عدّل الفيديو", "عدل الفيديو", "ركب فيديو", "قص الفيديو", "أضف انتقالات", "اضف انتقالات", "على الفيديو الموجود", "هذا الفيديو").any { normalized.contains(it) }
         val wantsNewVideo = !wantsEdit && listOf("سوي فيديو", "سوّي فيديو", "سويلي فيديو", "صمم فيديو", "صمّم فيديو", "صمملي فيديو", "صمّملي فيديو", "اصنع فيديو", "أنشئ فيديو", "انشئ فيديو", "ولد فيديو", "ولّد فيديو", "اعمل فيديو", "generate video", "make a video").any { normalized.contains(it) }
+        val wantsDirectGeneration = listOf("ولد فيديو", "ولّد فيديو", "توليد فيديو بالذكاء الاصطناعي", "انشئ فيديو بالذكاء الاصطناعي", "أنشئ فيديو بالذكاء الاصطناعي", "generate video with ai").any { normalized.contains(it) }
         val wantsNewImage = listOf("صمم صورة", "صمّم صورة", "صمملي صورة", "صمّملي صورة", "أنشئ صورة", "انشئ صورة", "ولد صورة", "ولّد صورة", "صمم شعار", "صمملي شعار", "صمم لوجو", "صمملي لوجو", "صمم بوستر", "صمملي بوستر", "create an image", "generate an image", "design a logo").any { normalized.contains(it) }
         val isCapCutTask = normalized.contains("capcut") && listOf("صمم", "صمّم", "سوي", "سوّي", "عدل", "عدّل", "مونتاج", "منتاج", "مشروع").any { normalized.contains(it) }
         val isDesignTask = wantsEdit || isCapCutTask
-        if (wantsNewVideo) {
+        if (wantsNewVideo && !wantsDirectGeneration) {
             thinking = true
-            testStatus = "أحوّل فكرتك إلى فيديو فعلي..."
+            testStatus = "أفتح CapCut وأبدأ إنشاء مشروع..."
+            val launched = onCommand("افتح CapCut")
+            if (launched.startsWith("فتحت")) {
+                onRunAgent(text) { result ->
+                    messages = messages + ChatLine(result, false)
+                    thinking = false
+                    testStatus = "انتهت محاولة إنشاء الفيديو"
+                    onSpeak(result)
+                }
+            } else {
+                messages = messages + ChatLine("تعذر فتح CapCut: " + launched, false)
+                thinking = false
+                testStatus = "تعذر فتح CapCut"
+            }
+            return
+        }
+        if (wantsDirectGeneration) {
+            thinking = true
+            testStatus = "أولّد الفيديو بالذكاء الاصطناعي..."
             onGenerateVideo(text) { output ->
                 messages = messages + ChatLine(output, false)
-                if (output.startsWith("تم إنشاء الفيديو")) {
-                    thinking = false
-                    testStatus = "الفيديو محفوظ بالمعرض"
-                    onSpeak(output)
-                } else {
-                    val launched = onCommand("افتح CapCut")
-                    if (launched.startsWith("فتحت")) {
-                        messages = messages + ChatLine("التوليد المباشر تعذّر؛ أحاول الآن تنفيذ المطلوب داخل CapCut.", false)
-                        testStatus = "أحاول التنفيذ عبر CapCut..."
-                        onRunAgent(text) { fallback ->
-                            messages = messages + ChatLine(fallback, false)
-                            thinking = false
-                            testStatus = "انتهت محاولة CapCut"
-                            onSpeak(fallback)
-                        }
-                    } else {
-                        val finalMessage = output + " ما قدرت أفتح CapCut كخطة بديلة: " + launched
-                        messages = messages + ChatLine(finalMessage, false)
-                        thinking = false
-                        testStatus = "تعذر تنفيذ الفيديو"
-                        onSpeak(finalMessage)
-                    }
-                }
+                thinking = false
+                testStatus = if (output.startsWith("تم إنشاء الفيديو")) "الفيديو محفوظ بالمعرض" else "تعذر التوليد المباشر"
+                onSpeak(output)
             }
             return
         }
