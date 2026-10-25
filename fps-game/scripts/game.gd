@@ -1133,6 +1133,19 @@ func _detonate_grenade(grenade: RigidBody3D, owner_player: Node3D) -> void:
  light.light_energy = 4.5
  light.omni_range = 10.0
  world_root.add_child(light)
+ var boom := AudioStreamPlayer3D.new()
+ boom.name = "GrenadeExplosionAudio"
+ boom.stream = load("res://assets/audio/explosion.wav") as AudioStream
+ boom.volume_db = -2.0
+ boom.max_distance = 95.0
+ boom.unit_size = 9.0
+ boom.position = center
+ world_root.add_child(boom)
+ if boom.stream != null:
+  boom.play()
+  boom.finished.connect(Callable(boom,"queue_free"))
+ else:
+  boom.queue_free()
  var tween := create_tween()
  tween.tween_property(blast,"scale",Vector3.ONE*8.0,0.22)
  tween.parallel().tween_property(blast_material,"albedo_color",Color(1.0,0.10,0.02,0.0),0.22)
