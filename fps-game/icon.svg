@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#101c21"/>
+      <stop offset="1" stop-color="#05090c"/>
+    </linearGradient>
+    <linearGradient id="steel" x1="0" y1="0" x2="0.8" y2="1">
+      <stop offset="0" stop-color="#9db6a5"/>
+      <stop offset="1" stop-color="#38594c"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="96" fill="url(#bg)"/>
+  <path d="M45 128 L161 155 L256 105 L351 155 L467 128 L419 234 L350 286 L256 435 L162 286 L93 234 Z" fill="#162e2b" stroke="#709a86" stroke-width="8"/>
+  <path d="M82 145 L200 184 L256 156 L312 184 L430 145 L373 222 L302 250 L256 330 L210 250 L139 222 Z" fill="url(#steel)"/>
+  <path d="M134 207 L218 226 L256 199 L294 226 L378 207 L321 263 L279 271 L256 309 L233 271 L191 263 Z" fill="#0a1417"/>
+  <path d="M256 172 L271 225 L256 244 L241 225 Z" fill="#e2b45a"/>
+  <path d="M256 254 L285 284 L256 365 L227 284 Z" fill="#d18c36"/>
+  <path d="M45 388 H467" stroke="#e0b052" stroke-width="6" opacity=".9"/>
+  <text x="256" y="424" font-family="sans-serif" font-size="37" font-weight="800" letter-spacing="8" fill="#e8eee8" text-anchor="middle">VOID</text>
+  <text x="256" y="463" font-family="sans-serif" font-size="18" font-weight="700" letter-spacing="5" fill="#8fac9a" text-anchor="middle">FRONTLINE</text>
+</svg>
