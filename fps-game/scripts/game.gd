@@ -2,6 +2,7 @@ extends Node3D
 
 const PlayerScript = preload("res://scripts/player.gd")
 const EnemyScript = preload("res://scripts/enemy.gd")
+const RadarScript = preload("res://scripts/radar.gd")
 const CITY_BUILDING_NAMES := ["building-a","building-b","building-c","building-d","building-e","building-f"]
 const MISSIONS := [
  {"title":"الفصل الأول: صدى الصحراء","brief":"العام 2034. أنت الرقيب آدم الراوي، قائد فريق الاستجابة المعروف باسم الصقر. قبل الفجر بثلاث عشرة دقيقة انقطع بث الحامية الحدودية «الساتر 7». وصل آخر تسجيل صوتي مشوش: ثلاث طلقات، ثم صوت ضابط يقول إنهم يعرفون اسم العملية. وصلت وحدك إلى المحيط لتكتشف أن الحراسة اختفت، والمولد ما زال يعمل، وآثار المركبات تتجه إلى قلب الصحراء لا إلى الحدود. أمّن الموقع واستعد جهاز الاتصال؛ فالذي هاجم الحامية كان يبحث عن شيء محدد، وليس عن معركة عابرة.","radio":"آدم، هنا الملازم ليلى حسن في غرفة العمليات. لا تثق بأي تردد غير مشفر. أرسلنا لك إحداثيات الساتر 7، لكن الإشارة انقطعت قبل أن نعرف من كان يراقبنا.","objective":"أمّن الحامية واستعد الاتصال","enemies":5},
@@ -25,6 +26,8 @@ var game_active := false
 var mission_won := false
 var hud_layer: CanvasLayer
 var arabic_font: Font
+var radar_control: Control
+var spawned_enemies: Array = []
 var title_label: Label
 var status_label: Label
 var objective_label: Label
@@ -54,6 +57,7 @@ func _process(delta: float) -> void:
   if child.name == "TouchControls": child.visible = game_active
  if is_instance_valid(reticle_label):
   reticle_label.visible = game_active
+ if is_instance_valid(radar_control): radar_control.visible = game_active
   if hitmarker_left > 0.0:
    hitmarker_left = maxf(0.0,hitmarker_left-delta)
    if hitmarker_left == 0.0:
@@ -149,6 +153,17 @@ func _build_hud() -> void:
  reticle_label.offset_bottom = 22
  reticle_label.visible = false
  hud_layer.add_child(reticle_label)
+ radar_control = Control.new()
+ radar_control.name = "TacticalRadar"
+ radar_control.set_script(RadarScript)
+ radar_control.mouse_filter = Control.MOUSE_FILTER_IGNORE
+ radar_control.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+ radar_control.offset_left = -184
+ radar_control.offset_top = 18
+ radar_control.offset_right = -18
+ radar_control.offset_bottom = 184
+ radar_control.visible = false
+ hud_layer.add_child(radar_control)
 
 func _show_main_menu() -> void:
  game_active = false
@@ -201,6 +216,7 @@ func _start_mission() -> void:
  _spawn_objective()
  _spawn_enemies()
  _build_touch_controls()
+ _refresh_radar()
  story_label.text = ""
  _update_hud()
  _show_briefing_menu()
@@ -645,6 +661,7 @@ func _spawn_objective() -> void:
 
 func _spawn_enemies() -> void:
  enemies_left = int(MISSIONS[mission_index]["enemies"])
+ spawned_enemies.clear()
  for i in range(enemies_left):
   var enemy := CharacterBody3D.new()
   enemy.name = "Enemy_%02d" % i
@@ -652,6 +669,14 @@ func _spawn_enemies() -> void:
   enemy.position = Vector3(cos(angle)*randf_range(17,31),1.0,-18+sin(angle)*randf_range(13,25))
   enemy.set_script(EnemyScript)
   world_root.add_child(enemy)
+  spawned_enemies.append(enemy)
+
+func _refresh_radar() -> void:
+ if not is_instance_valid(radar_control): return
+ radar_control.set("tracked_player",player)
+ radar_control.set("objective",objective_marker)
+ radar_control.set("enemies",spawned_enemies)
+ radar_control.queue_redraw()
 
 func _build_touch_controls() -> void:
  var controls := Control.new()
