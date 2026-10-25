@@ -1,16 +1,20 @@
 package com.voidai.app
 
 import android.Manifest
+import android.content.ContentValues
 import android.content.Intent
 import android.content.pm.PackageManager
 import androidx.core.app.ActivityCompat
 import android.os.Bundle
+import android.os.Environment
 import android.os.Handler
 import android.os.Looper
+import android.os.Build
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
 import android.provider.Settings
+import android.provider.MediaStore
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -72,6 +76,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                 onCommand = { runCommand(it) },
                 onAskAI = { question, callback -> askGemini(question, callback) },
                 onRunAgent = { goal, callback -> runAgentTask(goal, callback) },
+                onGenerateVideo = { prompt, callback -> generateVideo(prompt, callback) },
                 onSaveApiKey = { key -> getSharedPreferences("void_ai", MODE_PRIVATE).edit().putString("gemini_api_key", key.trim()).apply() },
                 hasApiKey = { !getSharedPreferences("void_ai", MODE_PRIVATE).getString("gemini_api_key", "").isNullOrBlank() },
                 onListen = { callback -> startListening(callback) },
@@ -194,6 +199,132 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             }
             runOnUiThread { callback(answer); if (speakAnswer) say(answer) }
         }.start()
+    }
+
+    /**
+     * Generates a short original video with Gemini Omni Flash and stores it in the device's Movies library.
+     * This is an actual media-generation path; it does not pretend that opening CapCut created a video.
+     */
+    private fun generateVideo(userPrompt: String, callback: (String) -> Unit) {
+        val key = getSharedPreferences("void_ai", MODE_PRIVATE).getString("gemini_api_key", "").orEmpty()
+        if (key.isBlank()) {
+            callback("اربط مفتاح Gemini أولاً من «ربط AI». إنشاء الفيديو يحتاج اتصالاً بالإنترنت، وقد يعتمد على توفر النموذج وحصة حسابك.")
+            return
+        }
+        Thread {
+            var connection: HttpURLConnection? = null
+            val result = try {
+                val endpoint = URL("https://generativelanguage.googleapis.com/v1beta/interactions")
+                connection = endpoint.openConnection() as HttpURLConnection
+                connection.requestMethod = "POST"
+                connection.connectTimeout = 30000
+                // Video generation can take considerably longer than a text reply.
+                connection.readTimeout = 360000
+                connection.doOutput = true
+                connection.setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                connection.setRequestProperty("x-goog-api-key", key)
+                val prompt = """
+                    Create a polished short vertical 9:16 video based on the user's idea below.
+                    Use clear cinematic composition, intentional camera movement, coherent motion,
+                    attractive lighting, and suitable original sound where supported. Keep it suitable
+                    for a social-media short. Do not add legible captions or logos unless requested.
+                    User idea: ${userPrompt.trim()}
+                """.trimIndent()
+                val body = JSONObject()
+                    .put("model", "gemini-omni-flash-preview")
+                    .put("input", prompt)
+                    .put("response_format", JSONObject()
+                        .put("type", "video")
+                        .put("aspect_ratio", "9:16"))
+                connection.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
+                val code = connection.responseCode
+                val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+                val raw = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
+                if (code !in 200..299) {
+                    val detail = try {
+                        JSONObject(raw).optJSONObject("error")?.optString("message").orEmpty()
+                    } catch (_: Exception) { "" }
+                    val reason = detail.ifBlank { raw.take(500) }
+                    when (code) {
+                        400 -> "Gemini رفض طلب إنشاء الفيديو (400): $reason"
+                        401 -> "مفتاح Gemini غير صالح (401). راجع المفتاح من «ربط AI»."
+                        403 -> "حساب أو مفتاح Gemini لا يملك صلاحية نموذج الفيديو (403): $reason"
+                        404 -> "نموذج الفيديو غير متاح لهذا الحساب أو المشروع (404): $reason"
+                        429 -> "وصلت إلى حد الطلبات أو الحصة (429). جرّب لاحقاً أو راجع الحصة والتسعير: $reason"
+                        else -> "تعذر إنشاء الفيديو (HTTP $code): $reason"
+                    }
+                } else {
+                    val root = JSONObject(raw)
+                    var videoData = ""
+                    val directOutput = root.optJSONObject("output_video")
+                    if (directOutput != null) videoData = directOutput.optString("data", "")
+                    val steps = root.optJSONArray("steps")
+                    if (videoData.isBlank() && steps != null) {
+                        for (i in 0 until steps.length()) {
+                            val step = steps.optJSONObject(i) ?: continue
+                            if (step.optString("type") != "model_output") continue
+                            val blocks = step.optJSONArray("content") ?: continue
+                            for (j in 0 until blocks.length()) {
+                                val block = blocks.optJSONObject(j) ?: continue
+                                if (block.optString("type") == "video") {
+                                    videoData = block.optString("data", "")
+                                    if (videoData.isNotBlank()) break
+                                }
+                            }
+                            if (videoData.isNotBlank()) break
+                        }
+                    }
+                    if (videoData.isBlank()) {
+                        val state = root.optString("status", "unknown")
+                        "رجع Gemini من دون ملف فيديو قابل للحفظ (الحالة: $state). راجع توفر نموذج Gemini Omni Flash وصلاحية حسابك."
+                    } else {
+                        val bytes = try {
+                            android.util.Base64.decode(videoData, android.util.Base64.DEFAULT)
+                        } catch (e: Exception) {
+                            throw IllegalStateException("وصل رد فيديو لكن تعذر فك ترميزه: " + (e.message ?: "بيانات غير صالحة"))
+                        }
+                        if (bytes.isEmpty()) throw IllegalStateException("ملف الفيديو الناتج فارغ.")
+                        val savedUri = saveGeneratedVideo(bytes)
+                        "تم إنشاء الفيديو وحفظه في Movies/VOID AI داخل المعرض. اسم الملف: " +
+                            (savedUri.lastPathSegment ?: "VOID_AI_${System.currentTimeMillis()}.mp4") +
+                            ". إذا لم يظهر فوراً، افتح المعرض أو تطبيق الملفات."
+                    }
+                }
+            } catch (e: Exception) {
+                "ما اكتمل إنشاء الفيديو: " + (e.message ?: "خطأ غير معروف") +
+                    ". تأكد من الإنترنت وتوفر نموذج الفيديو والحصة المتاحة."
+            } finally {
+                connection?.disconnect()
+            }
+            runOnUiThread { callback(result) }
+        }.start()
+    }
+
+    private fun saveGeneratedVideo(bytes: ByteArray): Uri {
+        val fileName = "VOID_AI_${System.currentTimeMillis()}.mp4"
+        val values = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+            put(MediaStore.MediaColumns.MIME_TYPE, "video/mp4")
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_MOVIES + "/VOID AI")
+                put(MediaStore.MediaColumns.IS_PENDING, 1)
+            }
+        }
+        val uri = contentResolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values)
+            ?: throw IllegalStateException("أندرويد لم يسمح بإنشاء ملف في مجلد الفيديو.")
+        try {
+            val output = contentResolver.openOutputStream(uri, "w")
+                ?: throw IllegalStateException("تعذر فتح الملف الناتج للكتابة.")
+            output.use { it.write(bytes) }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val ready = ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }
+                contentResolver.update(uri, ready, null, null)
+            }
+            return uri
+        } catch (e: Exception) {
+            contentResolver.delete(uri, null, null)
+            throw e
+        }
     }
 
     private fun installedAppLabels(): List<Pair<String, String>> {
@@ -405,6 +536,7 @@ private fun VoidAiApp(
     onCommand: (String) -> String,
     onAskAI: (String, (String) -> Unit) -> Unit,
     onRunAgent: (String, (String) -> Unit) -> Unit,
+    onGenerateVideo: (String, (String) -> Unit) -> Unit,
     onSaveApiKey: (String) -> Unit,
     hasApiKey: () -> Boolean,
     onListen: ((String) -> Unit) -> Unit,
@@ -431,7 +563,21 @@ private fun VoidAiApp(
         input = ""
         testStatus = "جاري تنفيذ الأمر..."
         val normalized = text.lowercase(Locale.ROOT)
-        val isDesignTask = listOf("صمم فيديو", "صمّم فيديو", "صمملي فيديو", "صمّملي فيديو", "سوي فيديو", "سوّي فيديو", "سويلي فيديو", "سويلي مونتاج", "مونتاج", "منتاج", "عدّل فيديو", "عدل فيديو", "ركب فيديو", "اصنع فيديو", "أنشئ فيديو", "انشئ فيديو", "حرر فيديو", "تعديل الفيديو", "كاب كات", "capcut").any { normalized.contains(it) }
+        val wantsEdit = listOf("مونتاج", "منتاج", "عدّل فيديو", "عدل فيديو", "عدّل الفيديو", "عدل الفيديو", "ركب فيديو", "قص الفيديو", "أضف انتقالات", "اضف انتقالات", "على الفيديو الموجود", "هذا الفيديو").any { normalized.contains(it) }
+        val wantsNewVideo = !wantsEdit && listOf("سوي فيديو", "سوّي فيديو", "سويلي فيديو", "صمم فيديو", "صمّم فيديو", "صمملي فيديو", "صمّملي فيديو", "اصنع فيديو", "أنشئ فيديو", "انشئ فيديو", "ولد فيديو", "ولّد فيديو", "اعمل فيديو", "generate video", "make a video").any { normalized.contains(it) }
+        val isCapCutTask = normalized.contains("capcut") && listOf("صمم", "صمّم", "سوي", "سوّي", "عدل", "عدّل", "مونتاج", "منتاج", "مشروع").any { normalized.contains(it) }
+        val isDesignTask = wantsEdit || isCapCutTask
+        if (wantsNewVideo) {
+            thinking = true
+            testStatus = "أحوّل فكرتك إلى فيديو فعلي..."
+            onGenerateVideo(text) { output ->
+                messages = messages + ChatLine(output, false)
+                thinking = false
+                testStatus = if (output.startsWith("تم إنشاء الفيديو")) "الفيديو محفوظ بالمعرض" else "تعذر إنشاء الفيديو"
+                onSpeak(output)
+            }
+            return
+        }
         val response = if (isDesignTask) onCommand("افتح CapCut") else onCommand(text)
         if (response.startsWith("أكدر أنفذ أوامر مباشرة") || isDesignTask) {
             thinking = true
