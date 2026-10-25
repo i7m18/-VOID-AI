@@ -1116,14 +1116,16 @@ private fun VoidAiApp(
                     confirmButton = {
                         TextButton(onClick = {
                             val candidate = backendUrlInput.trim().trimEnd('/')
-                            if (candidate.startsWith("https://") && candidate.length > "https://".length) {
+                            if (candidate.startsWith("https://") &&
+                                candidate.length > "https://".length &&
+                                backendTokenInput.isNotBlank()) {
                                 onSaveBackend(candidate, backendTokenInput)
                                 backendDialog = false
                                 backendUrlInput = ""
                                 backendTokenInput = ""
                                 testStatus = "تم حفظ رابط الخادم؛ اختبر الاتصال"
                             } else {
-                                testStatus = "الرابط غير صالح: استخدم رابط HTTPS كامل"
+                                testStatus = "أدخل رابط HTTPS صحيحاً ورمز وصول الخادم"
                             }
                         }) { Text("حفظ اتصال الخادم") }
                     },
