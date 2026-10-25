@@ -32,6 +32,9 @@ var sprinting := false
 var crouched := false
 var grenades := 3
 var arm_group: Node3D
+var footstep_audio: AudioStreamPlayer3D
+var reload_audio: AudioStreamPlayer3D
+var footstep_timer := 0.0
 
 func _ready() -> void:
  add_to_group("player")
@@ -56,6 +59,7 @@ func _ready() -> void:
  _build_view_arms()
  _build_muzzle_effect()
  _build_shot_audio()
+ _build_movement_audio()
 
 func _process(delta: float) -> void:
  if muzzle_flash_remaining > 0.0:
@@ -195,6 +199,20 @@ func _refresh_weapon_audio() -> void:
   pcm.append((sample >> 8) & 0xff)
  wav.data = pcm
  shot_audio.stream = wav
+
+func _build_movement_audio() -> void:
+ footstep_audio = AudioStreamPlayer3D.new()
+ footstep_audio.name = "Footsteps"
+ footstep_audio.stream = load("res://assets/audio/footstep_sand.wav") as AudioStream
+ footstep_audio.volume_db = -10.0
+ footstep_audio.max_distance = 24.0
+ add_child(footstep_audio)
+ reload_audio = AudioStreamPlayer3D.new()
+ reload_audio.name = "ReloadAudio"
+ reload_audio.stream = load("res://assets/audio/reload.wav") as AudioStream
+ reload_audio.volume_db = -8.0
+ reload_audio.max_distance = 20.0
+ add_child(reload_audio)
 
 func _build_weapon_model() -> void:
  weapon_model = Node3D.new()
@@ -367,11 +385,27 @@ func _physics_process(delta: float) -> void:
  if Input.is_key_pressed(KEY_SPACE) and is_on_floor() and not in_vehicle:
   velocity.y=JUMP_VELOCITY
  move_and_slide()
+ _update_footsteps(delta)
  if in_vehicle:
   var car=root.get("vehicle")
   if is_instance_valid(car):
    car.global_position=global_position+global_basis*Vector3(0,-0.15,0.65)
    car.global_rotation.y=rotation.y
+
+func _update_footsteps(delta: float) -> void:
+ if not is_instance_valid(footstep_audio): return
+ var root := get_tree().current_scene
+ var active := is_instance_valid(root) and bool(root.get("game_active"))
+ var moving := active and not in_vehicle and is_on_floor() and Vector2(velocity.x,velocity.z).length() > 0.8
+ if not moving:
+  footstep_timer = 0.10
+  return
+ footstep_timer -= delta
+ if footstep_timer <= 0.0 and footstep_audio.stream != null:
+  footstep_audio.volume_db = -18.0 if crouched else (-5.5 if sprinting else -10.0)
+  footstep_audio.pitch_scale = randf_range(0.91,1.08)
+  footstep_audio.play()
+  footstep_timer = 0.40 if sprinting else (0.72 if crouched else 0.54)
 
 func fire() -> void:
  if in_vehicle or reloading or fire_timer>0.0: return
@@ -428,6 +462,7 @@ func get_current_reserve_ammo() -> int:
 func reload_weapon() -> void:
  if reloading or int(ammo[weapon_index])>=MAGAZINES[weapon_index] or int(reserve_ammo[weapon_index])<=0: return
  reloading=true
+ if is_instance_valid(reload_audio) and reload_audio.stream != null: reload_audio.play()
  reload_token+=1
  var token:=reload_token
  _update_hud()
