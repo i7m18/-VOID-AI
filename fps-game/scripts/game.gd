@@ -3,6 +3,7 @@ extends Node3D
 const PlayerScript = preload("res://scripts/player.gd")
 const EnemyScript = preload("res://scripts/enemy.gd")
 const RadarScript = preload("res://scripts/radar.gd")
+const SAVE_PATH := "user://void_frontline_progress.cfg"
 const CITY_BUILDING_NAMES := ["building-a","building-b","building-c","building-d","building-e","building-f"]
 const MISSIONS := [
  {"title":"الفصل الأول: صدى الصحراء","brief":"العام 2034. أنت الرقيب آدم الراوي، قائد فريق الاستجابة المعروف باسم الصقر. قبل الفجر بثلاث عشرة دقيقة انقطع بث الحامية الحدودية «الساتر 7». وصل آخر تسجيل صوتي مشوش: ثلاث طلقات، ثم صوت ضابط يقول إنهم يعرفون اسم العملية. وصلت وحدك إلى المحيط لتكتشف أن الحراسة اختفت، والمولد ما زال يعمل، وآثار المركبات تتجه إلى قلب الصحراء لا إلى الحدود. أمّن الموقع واستعد جهاز الاتصال؛ فالذي هاجم الحامية كان يبحث عن شيء محدد، وليس عن معركة عابرة.","radio":"آدم، هنا الملازم ليلى حسن في غرفة العمليات. لا تثق بأي تردد غير مشفر. أرسلنا لك إحداثيات الساتر 7، لكن الإشارة انقطعت قبل أن نعرف من كان يراقبنا.","objective":"أمّن الحامية واستعد الاتصال","enemies":5},
@@ -28,6 +29,9 @@ var hud_layer: CanvasLayer
 var arabic_font: Font
 var radar_control: Control
 var spawned_enemies: Array = []
+var menu_camera: Camera3D
+var unlocked_mission := 0
+var campaign_completed := false
 var title_label: Label
 var status_label: Label
 var objective_label: Label
@@ -49,8 +53,32 @@ func _ready() -> void:
  world_root = Node3D.new()
  world_root.name = "GeneratedWorld"
  add_child(world_root)
+ _load_campaign_progress()
+ _build_world()
+ _build_menu_camera()
  _build_hud()
  _show_main_menu()
+
+func _build_menu_camera() -> void:
+ menu_camera = Camera3D.new()
+ menu_camera.name = "CampaignPreviewCamera"
+ menu_camera.position = Vector3(0,6.4,20)
+ menu_camera.fov = 68.0
+ world_root.add_child(menu_camera)
+ menu_camera.look_at(Vector3(0,2.4,-22),Vector3.UP)
+ menu_camera.current = true
+
+func _load_campaign_progress() -> void:
+ var save := ConfigFile.new()
+ if save.load(SAVE_PATH) != OK: return
+ unlocked_mission = clampi(int(save.get_value("campaign","unlocked_mission",0)),0,MISSIONS.size()-1)
+ campaign_completed = bool(save.get_value("campaign","completed",false))
+
+func _save_campaign_progress() -> void:
+ var save := ConfigFile.new()
+ save.set_value("campaign","unlocked_mission",unlocked_mission)
+ save.set_value("campaign","completed",campaign_completed)
+ save.save(SAVE_PATH)
 
 func _process(delta: float) -> void:
  for child in hud_layer.get_children():
@@ -175,27 +203,37 @@ func _show_main_menu() -> void:
  menu_panel.anchor_right = 0.5
  menu_panel.anchor_top = 0.5
  menu_panel.anchor_bottom = 0.5
- menu_panel.offset_left = -260
- menu_panel.offset_right = 260
- menu_panel.offset_top = -230
- menu_panel.offset_bottom = 230
+ menu_panel.offset_left = -275
+ menu_panel.offset_right = 275
+ menu_panel.offset_top = -245
+ menu_panel.offset_bottom = 245
  menu_panel.add_theme_stylebox_override("panel",_panel_style())
  hud_layer.add_child(menu_panel)
  var col := VBoxContainer.new()
- col.add_theme_constant_override("separation",10)
+ col.add_theme_constant_override("separation",9)
  menu_panel.add_child(col)
- var title := _label("VOID FRONTLINE",31,Color(0.42,0.94,0.75))
+ var title := _label("VOID FRONTLINE",32,Color(0.68,0.87,0.74))
  title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
  col.add_child(title)
- var subtitle := _label("جبهة الظل • حملة عسكرية فردية",19)
+ var subtitle := _label("جبهة الظل • حملة عمليات خاصة",20,Color(0.92,0.73,0.36))
  subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
  col.add_child(subtitle)
- col.add_child(_label("عام 2034 — اختفت دورية كاملة على حدود الصحراء. أنت قائد آخر فريق استجابة، وكل خطوة تقربك من الحقيقة أو الفخ.",17))
- col.add_child(_make_button("ابدأ الحملة",Callable(self,"_start_campaign"),58))
- col.add_child(_label("على الهاتف: أزرار الحركة • اسحب يمين الشاشة للتصويب • إطلاق • تلقيم • تبديل السلاح",14))
+ col.add_child(_label("2034 • انقطع الاتصال بقاعدة حدودية، وفريق الصقر هو آخر أمل لكشف شبكة الأوامر المزوّرة.",17))
+ if unlocked_mission > 0 or campaign_completed:
+  col.add_child(_make_button("متابعة الحملة — الفصل %d" % (unlocked_mission+1),Callable(self,"_continue_campaign"),52))
+ col.add_child(_make_button("ابدأ حملة جديدة",Callable(self,"_start_campaign"),58))
+ col.add_child(_label("تحكم الهاتف: الأسهم للحركة • اسحب المساحة الوسطى للتصويب • التصويب الدقيق والركض والانحناء والقنابل في أزرار الميدان.",14))
+ col.add_child(_label("الحملة الفردية • 9 فصول مترابطة • ترجمة عربية",13,Color(0.57,0.72,0.63)))
 
 func _start_campaign() -> void:
  mission_index = 0
+ unlocked_mission = 0
+ campaign_completed = false
+ _save_campaign_progress()
+ _start_mission()
+
+func _continue_campaign() -> void:
+ mission_index = unlocked_mission
  _start_mission()
 
 func _start_mission() -> void:
@@ -206,6 +244,7 @@ func _start_mission() -> void:
  fire_held = false
  message_label.text = ""
  if is_instance_valid(menu_panel): menu_panel.queue_free()
+ menu_camera = null
  for child in world_root.get_children(): child.queue_free()
  for child in hud_layer.get_children():
   if child.name == "TouchControls": child.queue_free()
@@ -947,6 +986,12 @@ func interact_objective() -> void:
  _show_completion_menu()
 
 func _show_completion_menu() -> void:
+ if mission_index < MISSIONS.size()-1:
+  unlocked_mission = maxi(unlocked_mission,mission_index+1)
+ else:
+  campaign_completed = true
+  unlocked_mission = MISSIONS.size()-1
+ _save_campaign_progress()
  if is_instance_valid(menu_panel): menu_panel.queue_free()
  menu_panel = PanelContainer.new()
  menu_panel.anchor_left=0.5
