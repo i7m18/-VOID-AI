@@ -1,38 +1,44 @@
 # VOID AI — Android Assistant
 
-VOID AI is an Arabic-first Android assistant built with Kotlin, Jetpack Compose, Android speech recognition, Text-to-Speech, Gemini API, and an explicitly enabled Accessibility Service.
+مساعد أندرويد عربي مبني بـ Kotlin وJetpack Compose، مع إدخال صوتي، قراءة صوتية للردود، Gemini API، وخدمة Accessibility اختيارية للتحكم بعناصر التطبيقات.
 
-## Current build
+## الإصدار 1.3
 
-- App version: **1.3**.
-- Animated orbital interface with active/listening/thinking status.
-- Arabic voice input and spoken responses.
-- Gemini model fallback: `gemini-3.8-flash`, `gemini-3.6-flash`, and `gemini-3.5-flash-lite`.
-- Multi-step screen agent: open apps, inspect visible accessibility text, tap visible controls, type into a focused non-password field, scroll, wait, and navigate Back/Home.
-- Up to 16 planning/execution turns, longer waits after opening apps, and replanning after failed steps.
-- Guardrails prevent the agent from automatically tapping clear send/publish/delete/purchase/payment controls. Password fields are never filled by the accessibility typing helper.
-- GitHub Actions builds a debug APK and uploads it as `VOID-AI-debug-apk`.
+- واجهة عربية داكنة مع نواة مدارية متحركة وحالات للصوت والتفكير والتنفيذ.
+- محادثة Gemini مع أكثر من نموذج احتياطي.
+- وكيل مهام متعدد الخطوات: قراءة النصوص الظاهرة، فتح التطبيقات، النقر على العناصر الواضحة، الكتابة في حقل نشط غير محمي بكلمة مرور، التمرير والانتظار والرجوع.
+- يعيد التخطيط بعد تعثر الخطوة، ويستخدم مهلات أطول بعد فتح التطبيقات.
+- أوامر «سويلي فيديو عن…» يمكن أن تستدعي Gemini Omni Flash لتوليد فيديو عمودي وحفظه في `Movies/VOID AI`.
+- أوامر «صمملي صورة/شعار/بوستر…» يمكن أن تستدعي نموذج الصور وتحفظ الناتج في `Pictures/VOID AI`.
+- يطلب تأكيداً يدوياً لبعض الأزرار الحساسة مثل النشر والإرسال والحذف والدفع.
+- GitHub Actions يبني APK تجريبياً ويرفعه كـ artifact باسم `VOID-AI-debug-apk`.
 
-## First setup
+## الإعداد الأول
 
-1. Install the debug APK.
-2. In VOID AI, select **ربط AI** and enter your own Gemini API key. The app stores the key in its private app preferences. Do not share or commit the key.
-3. Select **تحكم الشاشة**, find the VOID AI accessibility service in Android settings, and enable it only after reviewing what accessibility access means.
-4. Return to VOID AI. Use **اختبار AI** before starting a task.
-5. Give a clear task. For example: “افتح CapCut، ابدأ مشروع جديد، وورّيني شاشة اختيار المقاطع”. For video editing, the agent can only proceed through controls exposed to Android accessibility and assets you choose.
+1. ثبّت APK.
+2. افتح **ربط AI** وأدخل مفتاح Gemini API الخاص بك. يُحفظ المفتاح داخل بيانات التطبيق الخاصة؛ لا تشاركه ولا تضعه في مستودع عام.
+3. فعّل خدمة VOID AI يدوياً من **تحكم الشاشة → تسهيلات الاستخدام** إذا أردت التحكم في عناصر التطبيقات.
+4. اختر **اختبار AI** قبل بدء المهام.
+5. جرّب أوامر واضحة مثل «افتح يوتيوب»، «صمملي صورة لشعار فضائي»، أو «سويلي فيديو عمودي عن مدينة مستقبلية».
 
-## Build APK
+## توليد الصور والفيديو
 
-Open **Actions → Build VOID AI APK** and download the artifact `VOID-AI-debug-apk` after the workflow succeeds.
+تستخدم هذه الميزات واجهة Gemini Interactions API والنماذج التوليدية الحالية. تحتاج اتصالاً بالإنترنت، وقد تعتمد إمكانية الوصول للنموذج والحصة أو الرسوم على حساب Google ومشروع API. تُحفظ الملفات الناتجة محلياً في مجلدات Movies وPictures باسم VOID AI.
 
-## Important capability boundaries
+## بناء APK
 
-VOID AI is not unrestricted remote control. Android permissions, app login states, visual-only controls, protected screens, and each app's own behavior can block automation. The current agent reads accessibility-visible text; it does not yet have reliable vision for every canvas/timeline, and it cannot promise a finished CapCut export on every device. It must not claim a task was completed unless a visible result supports that claim. High-impact actions such as sending, publishing, deleting, or paying require manual confirmation.
+من تبويب **Actions → Build VOID AI APK** نزّل artifact المسمّى `VOID-AI-debug-apk` بعد نجاح البناء.
 
-## Development notes
+## الحدود الحالية
 
-- Android package: `com.voidai.app`
+VOID AI ليس تحكماً غير محدود ولا يمكن ضمان تنفيذ أي مهمة على كل تطبيق. خدمة الوصول تقرأ العناصر التي يعرضها التطبيق؛ بعض واجهات الرسم وخطوط الزمن والفيديوهات والأزرار المرئية فقط قد لا تكون قابلة للأتمتة. إنشاء الفيديو التوليدي ينتج مقطعاً قصيراً بحسب ما يدعمه النموذج والحساب، وليس وعداً بفيديو طويل أو بمونتاج كامل لمقطع موجود. تعديل فيديو موجود داخل CapCut ما زال يعتمد على واجهة CapCut وعناصرها المتاحة لخدمة الوصول. يجب ألا يدّعي التطبيق نجاح مهمة لم ينتج عنها دليل واضح.
+
+## التفاصيل التقنية
+
+- Package: `com.voidai.app`
 - Minimum SDK: 23
 - Target SDK: 35
-- Language/UI: Kotlin + Jetpack Compose
-- API model support and availability may change; check the [official Gemini models guide](https://ai.google.dev/gemini-api/docs/models).
+- Kotlin + Jetpack Compose
+- [توثيق نماذج Gemini](https://ai.google.dev/gemini-api/docs/models)
+- [توليد وتحرير الفيديو](https://ai.google.dev/gemini-api/docs/omni)
+- [توليد الصور](https://ai.google.dev/gemini-api/docs/image-generation)
