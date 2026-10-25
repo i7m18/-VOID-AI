@@ -26,6 +26,7 @@ var status_label: Label
 var objective_label: Label
 var story_label: Label
 var message_label: Label
+var reticle_label: Label
 var menu_panel: PanelContainer
 var move_state := Vector2.ZERO
 var fire_held := false
@@ -41,6 +42,7 @@ func _ready() -> void:
 func _process(_delta: float) -> void:
  for child in hud_layer.get_children():
   if child.name == "TouchControls": child.visible = game_active
+ if is_instance_valid(reticle_label): reticle_label.visible = game_active
  if game_active and fire_held and is_instance_valid(player):
   player.fire()
 
@@ -115,6 +117,19 @@ func _build_hud() -> void:
  story_label.position = Vector2(14,150)
  story_label.size = Vector2(430,142)
  hud_layer.add_child(story_label)
+ reticle_label = _label("＋",30,Color(0.58,1.0,0.78))
+ reticle_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+ reticle_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+ reticle_label.anchor_left = 0.5
+ reticle_label.anchor_right = 0.5
+ reticle_label.anchor_top = 0.5
+ reticle_label.anchor_bottom = 0.5
+ reticle_label.offset_left = -22
+ reticle_label.offset_right = 22
+ reticle_label.offset_top = -22
+ reticle_label.offset_bottom = 22
+ reticle_label.visible = false
+ hud_layer.add_child(reticle_label)
 
 func _show_main_menu() -> void:
  game_active = false
@@ -207,6 +222,18 @@ func _begin_mission() -> void:
  story_label.text = "اتصال لاسلكي: " + str(MISSIONS[mission_index]["radio"])
 
 func _build_world() -> void:
+ var world_environment := WorldEnvironment.new()
+ var environment := Environment.new()
+ environment.background_mode = Environment.BG_COLOR
+ environment.background_color = Color(0.42,0.50,0.53)
+ environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+ environment.ambient_light_color = Color(0.62,0.57,0.46)
+ environment.ambient_light_energy = 0.62
+ environment.fog_enabled = true
+ environment.fog_light_color = Color(0.64,0.57,0.44)
+ environment.fog_density = 0.0025
+ world_environment.environment = environment
+ world_root.add_child(world_environment)
  var ground := StaticBody3D.new()
  var mesh := MeshInstance3D.new()
  var plane := PlaneMesh.new()
@@ -252,6 +279,7 @@ func _build_world() -> void:
  var sun := DirectionalLight3D.new()
  sun.rotation_degrees = Vector3(-55,-25,0)
  sun.light_energy = 1.15
+ sun.shadow_enabled = true
  world_root.add_child(sun)
 
 func _add_structure(pos: Vector3,size: Vector3,color: Color) -> void:
