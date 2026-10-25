@@ -5,6 +5,7 @@ const CAR_SPEED := 13.5
 const JUMP_VELOCITY := 4.3
 const MOUSE_SENSITIVITY := 0.0022
 const WEAPON_NAMES := ["بندقية هجومية","رشاش خفيف","بندقية قنص"]
+const WEAPON_ASSET_PATHS := ["res://assets/weapons/assault_rifle.glb","res://assets/weapons/compact_smg.glb","res://assets/weapons/sniper_rifle.glb"]
 const MAGAZINES := [30,45,5]
 const DAMAGE := [34,19,100]
 const RATES := [0.17,0.095,0.85]
@@ -127,6 +128,38 @@ func _update_weapon_model() -> void:
  if not is_instance_valid(weapon_model): return
  for child in weapon_model.get_children():
   child.free()
+
+ # استخدم نموذج سلاح ثلاثي الأبعاد فعلياً، مع ضبط الحجم والمحور تلقائياً.
+ if weapon_index < WEAPON_ASSET_PATHS.size():
+  var packed := load(WEAPON_ASSET_PATHS[weapon_index]) as PackedScene
+  if packed != null:
+   var model := packed.instantiate() as Node3D
+   if model != null:
+    weapon_model.add_child(model)
+    var bounds: Array = []
+    _collect_weapon_bounds(model,model,bounds)
+    if not bounds.is_empty():
+     var aabb: AABB = bounds[0]
+     if aabb.size.length() > 0.001:
+      var longest_axis := 0
+      if aabb.size.y > aabb.size.x and aabb.size.y >= aabb.size.z:
+       longest_axis = 1
+      elif aabb.size.z > aabb.size.x and aabb.size.z > aabb.size.y:
+       longest_axis = 2
+      model.rotation = Vector3.ZERO
+      if longest_axis == 0:
+       model.rotation.y = PI * 0.5
+      elif longest_axis == 1:
+       model.rotation.x = PI * 0.5
+      var long_extent := maxf(aabb.size.x,maxf(aabb.size.y,aabb.size.z))
+      var target_length := 0.84 if weapon_index == 2 else 0.72
+      var uniform_scale := target_length / maxf(long_extent,0.001)
+      model.scale = Vector3.ONE * uniform_scale
+      model.position = -(model.basis * aabb.get_center())
+      return
+    model.queue_free()
+
+ # احتياط آمن عند غياب أحد ملفات الأصول.
  var dark := StandardMaterial3D.new()
  dark.albedo_color = Color(0.075,0.09,0.085)
  dark.metallic = 0.48
@@ -168,6 +201,24 @@ func _update_weapon_model() -> void:
  var muzzle := BoxMesh.new()
  muzzle.size = Vector3(0.064,0.064,0.07)
  _add_weapon_part(muzzle,Vector3(0,-0.005,-0.69 if weapon_index != 2 else -0.85),dark)
+
+func _collect_weapon_bounds(root_node: Node3D, current: Node, bounds: Array) -> void:
+ if current is MeshInstance3D:
+  var mesh_instance := current as MeshInstance3D
+  if mesh_instance.mesh != null:
+   var mesh_bounds := mesh_instance.get_aabb()
+   var relative_transform: Transform3D = root_node.global_transform.affine_inverse() * mesh_instance.global_transform
+   for x in [mesh_bounds.position.x,mesh_bounds.end.x]:
+    for y in [mesh_bounds.position.y,mesh_bounds.end.y]:
+     for z in [mesh_bounds.position.z,mesh_bounds.end.z]:
+      var point: Vector3 = relative_transform * Vector3(x,y,z)
+      if bounds.is_empty():
+       bounds.append(AABB(point,Vector3.ZERO))
+      else:
+       var old_bounds: AABB = bounds[0]
+       bounds[0] = old_bounds.expand(point)
+ for child in current.get_children():
+  _collect_weapon_bounds(root_node,child,bounds)
 
 func _unhandled_input(event: InputEvent) -> void:
  if event is InputEventKey and event.pressed:
