@@ -89,9 +89,19 @@ jobs:
           grep -E "^keystore/debug" fps-game/export_presets.cfg
 
       - name: Import and validate project
+        shell: bash
         run: |
-          godot --headless --editor --path fps-game --import
-          godot --headless --path fps-game --quit-after 3
+          set -o pipefail
+          godot --headless --editor --path fps-game --import 2>&1 | tee /tmp/godot-import.log
+          if grep -Eq 'SCRIPT ERROR:|Parse Error:|ERROR: Failed to load script' /tmp/godot-import.log; then
+            echo "Godot import reported script errors."
+            exit 1
+          fi
+          godot --headless --path fps-game --quit-after 3 2>&1 | tee /tmp/godot-run.log
+          if grep -Eq 'SCRIPT ERROR:|Parse Error:|ERROR: Failed to load script' /tmp/godot-run.log; then
+            echo "Godot runtime validation reported script errors."
+            exit 1
+          fi
 
       - name: Export Android APK
         run: |
