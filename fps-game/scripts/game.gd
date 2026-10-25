@@ -893,7 +893,7 @@ func _build_touch_controls() -> void:
  switch.custom_minimum_size = Vector2(160,45)
  controls.add_child(switch)
  var interact := _make_button("تفاعل",Callable(self,"interact_objective"),45)
- interact.position = Vector2(w-335,h-105)
+ interact.position = Vector2(w-335,h-155)
  interact.custom_minimum_size = Vector2(150,45)
  controls.add_child(interact)
  var aim := _make_button("تصويب",Callable(self,"_dummy"),44)
@@ -926,41 +926,12 @@ func _build_touch_controls() -> void:
  car.position = Vector2(w-335,h-55)
  car.custom_minimum_size = Vector2(160,45)
  controls.add_child(car)
- var pause := _make_button("إيقاف",Callable(self,"_pause_game"),42)
- pause.position = Vector2(w-130,14)
- pause.custom_minimum_size = Vector2(112,42)
- controls.add_child(pause)
 
 func _dummy() -> void:
  pass
 
 func get_move_input() -> Vector2:
  return move_state
-
-func _pause_game() -> void:
- game_active = false
- if is_instance_valid(menu_panel): menu_panel.queue_free()
- menu_panel = PanelContainer.new()
- menu_panel.anchor_left = 0.5
- menu_panel.anchor_right = 0.5
- menu_panel.anchor_top = 0.5
- menu_panel.anchor_bottom = 0.5
- menu_panel.offset_left = -210
- menu_panel.offset_right = 210
- menu_panel.offset_top = -140
- menu_panel.offset_bottom = 140
- menu_panel.add_theme_stylebox_override("panel",_panel_style())
- hud_layer.add_child(menu_panel)
- var col := VBoxContainer.new()
- menu_panel.add_child(col)
- col.add_child(_label("القائمة",26,Color(0.42,0.94,0.75)))
- col.add_child(_make_button("متابعة المهمة",Callable(self,"_resume_game")))
- col.add_child(_make_button("إعادة المهمة",Callable(self,"_restart_mission")))
- col.add_child(_make_button("القائمة الرئيسية",Callable(self,"_show_main_menu")))
-
-func _resume_game() -> void:
- if is_instance_valid(menu_panel): menu_panel.queue_free()
- game_active = true
 
 func _restart_mission() -> void:
  if is_instance_valid(menu_panel): menu_panel.queue_free()
