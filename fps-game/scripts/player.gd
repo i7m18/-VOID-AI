@@ -390,13 +390,18 @@ func fire() -> void:
   shot_audio.pitch_scale = randf_range(0.92,1.06)
   shot_audio.play()
  ray.force_raycast_update()
+ var hit_position := camera.global_position-camera.global_basis.z*42.0
  if ray.is_colliding():
+  hit_position = ray.get_collision_point()
   var target=ray.get_collider()
   if is_instance_valid(target) and target.has_method("take_damage"):
    target.take_damage(DAMAGE[weapon_index])
    var root := get_tree().current_scene
    if is_instance_valid(root) and root.has_method("show_hitmarker"):
     root.show_hitmarker()
+ var current_root := get_tree().current_scene
+ if is_instance_valid(current_root) and current_root.has_method("spawn_tracer"):
+  current_root.spawn_tracer(camera.global_position-camera.global_basis.z*0.78,hit_position)
  _update_hud()
 
 func switch_weapon() -> void:
