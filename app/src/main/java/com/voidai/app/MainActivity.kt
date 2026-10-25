@@ -41,6 +41,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Mic
@@ -696,25 +697,8 @@ private fun VoidAiApp(
         val wantsNewImage = listOf("صمم صورة", "صمّم صورة", "صمملي صورة", "صمّملي صورة", "أنشئ صورة", "انشئ صورة", "ولد صورة", "ولّد صورة", "صمم شعار", "صمملي شعار", "صمم لوجو", "صمملي لوجو", "صمم بوستر", "صمملي بوستر", "create an image", "generate an image", "design a logo").any { normalized.contains(it) }
         val isCapCutTask = normalized.contains("capcut") && listOf("صمم", "صمّم", "سوي", "سوّي", "عدل", "عدّل", "مونتاج", "منتاج", "مشروع").any { normalized.contains(it) }
         val isDesignTask = wantsEdit || isCapCutTask
-        if (wantsNewVideo && !wantsDirectGeneration) {
-            thinking = true
-            testStatus = "أفتح CapCut وأبدأ إنشاء مشروع..."
-            val launched = onCommand("افتح CapCut")
-            if (launched.startsWith("فتحت")) {
-                onRunAgent(text) { result ->
-                    messages = messages + ChatLine(result, false)
-                    thinking = false
-                    testStatus = "انتهت محاولة إنشاء الفيديو"
-                    onSpeak(result)
-                }
-            } else {
-                messages = messages + ChatLine("تعذر فتح CapCut: " + launched, false)
-                thinking = false
-                testStatus = "تعذر فتح CapCut"
-            }
-            return
-        }
-        if (wantsDirectGeneration) {
+        // Try real generation first; opening CapCut alone does not create a video.
+        if (wantsNewVideo || wantsDirectGeneration) {
             thinking = true
             testStatus = "أولّد الفيديو بالذكاء الاصطناعي..."
             onGenerateVideo(text) { output ->
@@ -923,7 +907,7 @@ private fun VoidAiApp(
                                         border = androidx.compose.foundation.BorderStroke(1.dp, if (msg.fromUser) cyan.copy(alpha = 0.19f) else violet.copy(alpha = 0.16f)),
                                         modifier = Modifier.widthIn(max = 310.dp)
                                     ) {
-                                        Text(msg.text, Modifier.padding(horizontal = 12.dp, vertical = 9.dp), color = Color(0xFFF3F6FF), textAlign = TextAlign.Right, fontSize = 13.sp, lineHeight = 19.sp)
+                                        SelectionContainer { Text(msg.text, Modifier.padding(horizontal = 12.dp, vertical = 9.dp), color = Color(0xFFF3F6FF), textAlign = TextAlign.Right, fontSize = 13.sp, lineHeight = 19.sp) }
                                     }
                                 }
                             }
