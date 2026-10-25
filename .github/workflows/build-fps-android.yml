@@ -73,6 +73,17 @@ jobs:
             test -s "fps-game/assets/buildings/${model}.glb"
           done
 
+      - name: Download CC0 weapon models
+        shell: bash
+        run: |
+          mkdir -p fps-game/assets/weapons
+          curl -L --fail --retry 3 'https://raw.githubusercontent.com/petroulacl/fps-asset-kit/main/weapons/flat_guns_west/Flat%20Guns%20West/GLB/Rifle_Assault_West.glb' -o fps-game/assets/weapons/assault_rifle.glb
+          curl -L --fail --retry 3 'https://raw.githubusercontent.com/petroulacl/fps-asset-kit/main/weapons/flat_guns_west/Flat%20Guns%20West/GLB/SMG_Compact_West.glb' -o fps-game/assets/weapons/compact_smg.glb
+          curl -L --fail --retry 3 'https://raw.githubusercontent.com/petroulacl/fps-asset-kit/main/weapons/flat_guns_west/Flat%20Guns%20West/GLB/Sniper_Material_West.glb' -o fps-game/assets/weapons/sniper_rifle.glb
+          test -s fps-game/assets/weapons/assault_rifle.glb
+          test -s fps-game/assets/weapons/compact_smg.glb
+          test -s fps-game/assets/weapons/sniper_rifle.glb
+
       - name: Configure Android debug signing and Godot SDK paths
         shell: bash
         run: |
