@@ -1,0 +1,226 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - game/fps-military-prototype
+    paths:
+      - "fps-game/**"
+      - ".github/workflows/build-fps-android.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  export-android:
+    name: Export Godot Android Debug APK
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-34 build-tools;34.0.0'
+          accept-android-sdk-licenses: true
+
+      - name: Install Android platform and build tools
+        run: |
+          yes | sdkmanager --licenses
+          sdkmanager --sdk_root="$ANDROID_HOME" "platform-tools" "platforms;android-34" "build-tools;34.0.0" "cmdline-tools;latest" "cmake;3.10.2.4988404" "ndk;23.2.8568313"
+          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
+
+      - name: Install Godot 4.3
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.3.0
+          use-dotnet: false
+
+      - name: Install matching export templates
+        shell: bash
+        run: |
+          mkdir -p "$HOME/.local/share/godot/export_templates/4.3.stable"
+          curl -L --fail --retry 3 \
+            https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_export_templates.tpz \
+            -o /tmp/godot-templates.tpz
+          mkdir -p /tmp/godot-templates
+          unzip -q /tmp/godot-templates.tpz -d /tmp/godot-templates
+          cp -a /tmp/godot-templates/templates/. "$HOME/.local/share/godot/export_templates/4.3.stable/"
+
+      - name: Install bundled Arabic UI font
+        shell: bash
+        run: |
+          mkdir -p fps-game/fonts
+          curl -L --fail --retry 3 'https://raw.githubusercontent.com/google/fonts/main/ofl/notosansarabic/NotoSansArabic%5Bwdth%2Cwght%5D.ttf' -o fps-game/fonts/NotoSansArabic.ttf
+          curl -L --fail --retry 3 'https://raw.githubusercontent.com/google/fonts/main/ofl/notosansarabic/OFL.txt' -o fps-game/fonts/OFL.txt
+          test -s fps-game/fonts/NotoSansArabic.ttf
+          test -s fps-game/fonts/OFL.txt
+
+      - name: Download CC0 city building models
+        shell: bash
+        run: |
+          mkdir -p fps-game/assets/buildings
+          for model in building-a building-b building-c building-d building-e building-f; do
+            curl -L --fail --retry 3 "https://raw.githubusercontent.com/Hidencod/tge-assets/main/packs/city-kit-commercial/${model}.glb" -o "fps-game/assets/buildings/${model}.glb"
+            test -s "fps-game/assets/buildings/${model}.glb"
+          done
+
+      - name: Download CC0 weapon models
+        shell: bash
+        run: |
+          mkdir -p fps-game/assets/weapons
+          curl -L --fail --retry 3 'https://raw.githubusercontent.com/petroulacl/fps-asset-kit/main/weapons/flat_guns_west/Flat%20Guns%20West/GLB/Rifle_Assault_West.glb' -o fps-game/assets/weapons/assault_rifle.glb
+          curl -L --fail --retry 3 'https://raw.githubusercontent.com/petroulacl/fps-asset-kit/main/weapons/flat_guns_west/Flat%20Guns%20West/GLB/SMG_Compact_West.glb' -o fps-game/assets/weapons/compact_smg.glb
+          curl -L --fail --retry 3 'https://raw.githubusercontent.com/petroulacl/fps-asset-kit/main/weapons/flat_guns_west/Flat%20Guns%20West/GLB/Sniper_Material_West.glb' -o fps-game/assets/weapons/sniper_rifle.glb
+          test -s fps-game/assets/weapons/assault_rifle.glb
+          test -s fps-game/assets/weapons/compact_smg.glb
+          test -s fps-game/assets/weapons/sniper_rifle.glb
+
+      - name: Download CC0 soldier models and generate combat audio
+        shell: bash
+        run: |
+          mkdir -p fps-game/assets/characters fps-game/assets/audio
+          for model in character-male-a character-male-b character-male-c; do
+            curl -L --fail --retry 3 "https://raw.githubusercontent.com/Hidencod/tge-assets/main/packs/mini-characters/${model}.glb" -o "fps-game/assets/characters/${model}.glb"
+            test -s "fps-game/assets/characters/${model}.glb"
+          done
+          python3 - <<'PY'
+          import math, random, struct, wave
+          from pathlib import Path
+
+          OUT = Path("fps-game/assets/audio")
+          OUT.mkdir(parents=True, exist_ok=True)
+          RATE = 22050
+          random.seed(81240)
+
+          def write_sound(filename, duration, mode):
+              total = int(RATE * duration)
+              samples = []
+              noise_state = 0.0
+              for i in range(total):
+                  t = i / RATE
+                  noise = random.uniform(-1.0, 1.0)
+                  noise_state = noise_state * 0.20 + noise * 0.80
+                  if mode == "footstep":
+                      body = 0.42 * math.sin(2 * math.pi * 72 * t) * math.exp(-t*34.0)
+                      report = 0.45 * noise_state * math.exp(-t*42.0)
+                      value = body + report
+                  elif mode == "reload":
+                      click_a = 0.55 * math.exp(-((t - 0.025) / 0.004) ** 2)
+                      click_b = 0.43 * math.exp(-((t - 0.092) / 0.006) ** 2)
+                      scrape = 0.16 * noise_state * math.exp(-t*10.0)
+                      value = click_a + click_b + scrape
+                  elif mode == "sniper":
+                      crack = 0.95 * math.exp(-((t - 0.004) / 0.0022) ** 2)
+                      body = 0.72 * math.sin(2 * math.pi * 54 * t) * math.exp(-t * 7.5)
+                      report = 0.52 * noise_state * math.exp(-t * 16.0)
+                      echo = 0.0
+                      for delay, gain in ((0.095, 0.26), (0.17, 0.14), (0.29, 0.06)):
+                          dt = t-delay
+                          if dt >= 0:
+                              echo += gain * math.sin(2 * math.pi * 67 * dt) * math.exp(-dt * 11.0)
+                      value = crack + body + report + echo
+                  elif mode == "explosion":
+                      crack = 0.58 * math.exp(-((t - 0.008) / 0.006) ** 2)
+                      body = 0.95 * math.sin(2 * math.pi * (43 + 10 * math.exp(-t*6)) * t) * math.exp(-t * 5.4)
+                      report = 0.62 * noise_state * math.exp(-t * 8.0)
+                      rumble = 0.30 * math.sin(2 * math.pi * 27 * t) * math.exp(-t*3.3)
+                      value = crack + body + report + rumble
+                  else:
+                      crack = 0.85 * math.exp(-((t - 0.003) / 0.0018) ** 2)
+                      body = 0.52 * math.sin(2 * math.pi * 82 * t) * math.exp(-t * 20.0)
+                      report = 0.72 * noise_state * math.exp(-t * 31.0)
+                      echo = 0.0
+                      for delay, gain in ((0.035, 0.18), (0.064, 0.08)):
+                          dt = t-delay
+                          if dt >= 0:
+                              echo += gain * noise_state * math.exp(-dt * 24.0)
+                      value = crack + body + report + echo
+                  value = max(-1.0, min(1.0, value * 0.72))
+                  samples.append(struct.pack("<h", int(value * 32767)))
+              with wave.open(str(OUT / filename), "wb") as wav:
+                  wav.setnchannels(1)
+                  wav.setsampwidth(2)
+                  wav.setframerate(RATE)
+                  wav.writeframes(b"".join(samples))
+
+          write_sound("rifle_shot.wav", 0.22, "rifle")
+          write_sound("sniper_shot.wav", 0.52, "sniper")
+          write_sound("explosion.wav", 0.82, "explosion")
+          write_sound("footstep_sand.wav", 0.12, "footstep")
+          write_sound("reload.wav", 0.18, "reload")
+          PY
+          file fps-game/assets/audio/*.wav
+          test -s fps-game/assets/audio/rifle_shot.wav
+          test -s fps-game/assets/audio/sniper_shot.wav
+          test -s fps-game/assets/audio/explosion.wav
+          test -s fps-game/assets/audio/footstep_sand.wav
+          test -s fps-game/assets/audio/reload.wav
+
+      - name: Configure Android debug signing and Godot SDK paths
+        shell: bash
+        run: |
+          mkdir -p "$HOME/.android" "$HOME/.config/godot"
+          keytool -genkeypair -v \
+            -keystore "$HOME/.android/debug.keystore" \
+            -storepass android -alias androiddebugkey -keypass android \
+            -dname "CN=Android Debug,O=Android,C=US" \
+            -keyalg RSA -keysize 2048 -validity 10000
+          cat > "$HOME/.config/godot/editor_settings-4.tres" <<EOF
+          [gd_resource type="EditorSettings" format=3]
+          [resource]
+          export/android/java_sdk_path = "$JAVA_HOME"
+          export/android/android_sdk_path = "$ANDROID_SDK_ROOT"
+          export/android/debug_keystore = "$HOME/.android/debug.keystore"
+          export/android/debug_keystore_user = "androiddebugkey"
+          export/android/debug_keystore_pass = "android"
+          EOF
+          echo "GODOT_ANDROID_KEYSTORE_DEBUG_PATH=$HOME/.android/debug.keystore" >> "$GITHUB_ENV"
+          echo "GODOT_ANDROID_KEYSTORE_DEBUG_USER=androiddebugkey" >> "$GITHUB_ENV"
+          echo "GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD=android" >> "$GITHUB_ENV"
+          sed -i "s|^keystore/debug=\"\"$|keystore/debug=\"$HOME/.android/debug.keystore\"|" fps-game/export_presets.cfg
+          sed -i 's|^keystore/debug_user=\"\"$|keystore/debug_user=\"androiddebugkey\"|' fps-game/export_presets.cfg
+          sed -i 's|^keystore/debug_password=\"\"$|keystore/debug_password=\"android\"|' fps-game/export_presets.cfg
+          grep -E "^keystore/debug" fps-game/export_presets.cfg
+
+      - name: Import and validate project
+        shell: bash
+        run: |
+          set -o pipefail
+          godot --headless --editor --path fps-game --import 2>&1 | tee /tmp/godot-import.log
+          if grep -Eq 'SCRIPT ERROR:|Parse Error:|ERROR: Failed to load script' /tmp/godot-import.log; then
+            echo "Godot import reported script errors."
+            exit 1
+          fi
+          godot --headless --path fps-game --quit-after 3 2>&1 | tee /tmp/godot-run.log
+          if grep -Eq 'SCRIPT ERROR:|Parse Error:|ERROR: Failed to load script' /tmp/godot-run.log; then
+            echo "Godot runtime validation reported script errors."
+            exit 1
+          fi
+
+      - name: Export Android APK
+        run: |
+          mkdir -p fps-game/build
+          godot --headless --verbose --path fps-game --export-debug "Android" build/VOID-FRONTLINE-debug.apk
+
+      - name: Verify APK
+        run: |
+          test -s fps-game/build/VOID-FRONTLINE-debug.apk
+          file fps-game/build/VOID-FRONTLINE-debug.apk
+          unzip -t fps-game/build/VOID-FRONTLINE-debug.apk | tail -n 2
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: VOID-FRONTLINE-debug-APK
+          path: fps-game/build/VOID-FRONTLINE-debug.apk
+          if-no-files-found: error
+          retention-days: 30
