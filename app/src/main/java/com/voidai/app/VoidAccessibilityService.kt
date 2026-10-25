@@ -65,6 +65,7 @@ class VoidAccessibilityService : AccessibilityService() {
     fun setFocusedText(text: String): Boolean {
         val root = rootInActiveWindow ?: return false
         val node = findFocused(root) ?: return false
+        if (node.isPassword || !node.isEditable || text.length > 12000) return false
         val args = Bundle().apply { putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text) }
         return node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
     }
@@ -81,7 +82,7 @@ class VoidAccessibilityService : AccessibilityService() {
         return scrollNode(root, up)
     }
     private fun scrollNode(node: AccessibilityNodeInfo, up: Boolean): Boolean {
-        if (node.isScrollable) return node.performAction(if (up) AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD else AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
+        if (node.isScrollable && node.performAction(if (up) AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD else AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)) return true
         for (i in 0 until node.childCount) {
             val child = node.getChild(i) ?: continue
             if (scrollNode(child, up)) return true
