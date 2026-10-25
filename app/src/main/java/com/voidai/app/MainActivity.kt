@@ -497,7 +497,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             val apps = installedAppLabels().joinToString(", ") { it.first }.take(1400)
             val prompt = listOf(
                 "أنت وكيل تحكم محلي داخل VOID AI على أندرويد. المطلوب من المستخدم: " + goal,
-                if (goal.contains("فيديو", true) || goal.contains("مونتاج", true) || goal.contains("CapCut", true)) "مهمة تحرير/تصميم فيديو: لا تعتبر فتح CapCut إنجازاً. افحص الشاشة، أنشئ مشروعاً عند توفر زر واضح، اختر الوسائط التي حدّدها المستخدم فقط، ونفّذ التحرير خطوة بخطوة. لا تخترع وسائط أو تدّع تصدير فيديو إذا لم يحدث فعلاً. إذا احتجت ملفاً أو اختياراً من المستخدم، اطلبه بوضوح." else "نفّذ المهمة المطلوبة قدر الإمكان على الشاشة الحالية، ولا تكتفِ بوصف ما ستفعله.",
+                if (goal.contains("فيديو", true) || goal.contains("مونتاج", true) || goal.contains("CapCut", true)) "مهمة تحرير/تصميم فيديو: لا تعتبر فتح CapCut إنجازاً. افحص الشاشة، أنشئ مشروعاً عند توفر زر واضح، اختر الوسائط التي حدّدها المستخدم فقط، ونفّذ التحرير خطوة بخطوة. لا تخترع وسائط أو تدّع تصدير فيديو إذا لم يحدث فعلاً. إذا احتجت ملفاً أو اختياراً من المستخدم، اطلبه بوضوح." else if (goal.contains("صورة", true) || goal.contains("شعار", true) || goal.contains("بوستر", true) || goal.contains("لوجو", true)) "مهمة تصميم صورة: إذا تعذر التوليد المباشر، جرّب تطبيق تصميم مثبت مثل Canva أو Picsart، ثم تعامل مع عناصر الشاشة خطوة بخطوة. لا تدّع حفظ التصميم ما لم يظهر دليل." else "نفّذ المهمة المطلوبة قدر الإمكان على الشاشة الحالية، ولا تكتفِ بوصف ما ستفعله.",
                 "الخطوات المنفذة سابقاً: " + history.joinToString(" | ").ifBlank { "لا توجد" },
                 "الشاشة الحالية:\n" + screen,
                 "التطبيقات المثبتة التي يمكن فتحها:\n" + apps,
@@ -692,9 +692,29 @@ private fun VoidAiApp(
             testStatus = "أحوّل فكرتك إلى فيديو فعلي..."
             onGenerateVideo(text) { output ->
                 messages = messages + ChatLine(output, false)
-                thinking = false
-                testStatus = if (output.startsWith("تم إنشاء الفيديو")) "الفيديو محفوظ بالمعرض" else "تعذر إنشاء الفيديو"
-                onSpeak(output)
+                if (output.startsWith("تم إنشاء الفيديو")) {
+                    thinking = false
+                    testStatus = "الفيديو محفوظ بالمعرض"
+                    onSpeak(output)
+                } else {
+                    val launched = onCommand("افتح CapCut")
+                    if (launched.startsWith("فتحت")) {
+                        messages = messages + ChatLine("التوليد المباشر تعذّر؛ أحاول الآن تنفيذ المطلوب داخل CapCut.", false)
+                        testStatus = "أحاول التنفيذ عبر CapCut..."
+                        onRunAgent(text) { fallback ->
+                            messages = messages + ChatLine(fallback, false)
+                            thinking = false
+                            testStatus = "انتهت محاولة CapCut"
+                            onSpeak(fallback)
+                        }
+                    } else {
+                        val finalMessage = output + " ما قدرت أفتح CapCut كخطة بديلة: " + launched
+                        messages = messages + ChatLine(finalMessage, false)
+                        thinking = false
+                        testStatus = "تعذر تنفيذ الفيديو"
+                        onSpeak(finalMessage)
+                    }
+                }
             }
             return
         }
@@ -703,9 +723,30 @@ private fun VoidAiApp(
             testStatus = "أحوّل فكرتك إلى تصميم فعلي..."
             onGenerateImage(text) { output ->
                 messages = messages + ChatLine(output, false)
-                thinking = false
-                testStatus = if (output.startsWith("تم إنشاء التصميم")) "التصميم محفوظ بالمعرض" else "تعذر إنشاء التصميم"
-                onSpeak(output)
+                if (output.startsWith("تم إنشاء التصميم")) {
+                    thinking = false
+                    testStatus = "التصميم محفوظ بالمعرض"
+                    onSpeak(output)
+                } else {
+                    val firstApp = onCommand("افتح Canva")
+                    val fallbackLaunch = if (firstApp.startsWith("فتحت")) firstApp else onCommand("افتح Picsart")
+                    if (fallbackLaunch.startsWith("فتحت")) {
+                        messages = messages + ChatLine("التوليد المباشر تعذّر؛ أحاول تنفيذ التصميم داخل التطبيق المثبت.", false)
+                        testStatus = "أحاول التصميم داخل التطبيق..."
+                        onRunAgent(text) { fallback ->
+                            messages = messages + ChatLine(fallback, false)
+                            thinking = false
+                            testStatus = "انتهت محاولة التصميم"
+                            onSpeak(fallback)
+                        }
+                    } else {
+                        val finalMessage = output + " ما لكيت Canva أو Picsart مثبتين كخطة بديلة."
+                        messages = messages + ChatLine(finalMessage, false)
+                        thinking = false
+                        testStatus = "تعذر تنفيذ التصميم"
+                        onSpeak(finalMessage)
+                    }
+                }
             }
             return
         }
