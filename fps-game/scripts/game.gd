@@ -995,6 +995,29 @@ func player_hit() -> void:
   col.add_child(_make_button("إعادة المحاولة",Callable(self,"_restart_mission")))
   col.add_child(_make_button("القائمة الرئيسية",Callable(self,"_show_main_menu")))
 
+func spawn_tracer(start_position: Vector3, end_position: Vector3) -> void:
+ var distance := start_position.distance_to(end_position)
+ if distance < 0.25: return
+ var tracer := MeshInstance3D.new()
+ tracer.name = "ShotTracer"
+ var mesh := BoxMesh.new()
+ mesh.size = Vector3(0.012,0.012,distance)
+ tracer.mesh = mesh
+ var material := StandardMaterial3D.new()
+ material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+ material.albedo_color = Color(1.0,0.78,0.37,0.9)
+ material.emission_enabled = true
+ material.emission = Color(1.0,0.38,0.08)
+ material.emission_energy_multiplier = 1.8
+ material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+ tracer.material_override = material
+ tracer.position = (start_position+end_position)*0.5
+ var up := Vector3.UP
+ if absf((end_position-start_position).normalized().dot(up)) > 0.96: up = Vector3.FORWARD
+ tracer.look_at(end_position,up)
+ world_root.add_child(tracer)
+ get_tree().create_timer(0.07).timeout.connect(Callable(tracer,"queue_free"))
+
 func show_message(value: String) -> void:
  if is_instance_valid(message_label):
   message_label.text = value
@@ -1111,3 +1134,11 @@ func _update_hud() -> void:
  else:
   objective_label.text = "الهدف: اقترب من العلامة واضغط «تفاعل»"
  status_label.text = "الصحة %d  |  الذخيرة %d/%d  |  القنابل %d  |  الأعداء %d  |  %s" % [player.health,player.get_current_ammo(),player.get_current_reserve_ammo(),player.grenades,enemies_left,player.get_weapon_name()]
+ if not objective_completed and is_instance_valid(objective_marker):
+  var distance := player.global_position.distance_to(objective_marker.global_position)
+  if enemies_left > 0:
+   objective_label.text = "الهدف: "+str(mission["objective"])+" • المتبقون %d" % enemies_left
+  elif distance > 4.5:
+   objective_label.text = "الهدف: "+str(mission["objective"])+" • المسافة %.0f م" % distance
+  else:
+   objective_label.text = "اقتربت من الهدف • اضغط «تفاعل»"
