@@ -73,6 +73,9 @@ jobs:
           export/android/debug_keystore_user = "androiddebugkey"
           export/android/debug_keystore_pass = "android"
           EOF
+          echo "GODOT_ANDROID_KEYSTORE_DEBUG_PATH=$HOME/.android/debug.keystore" >> "$GITHUB_ENV"
+          echo "GODOT_ANDROID_KEYSTORE_DEBUG_USER=androiddebugkey" >> "$GITHUB_ENV"
+          echo "GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD=android" >> "$GITHUB_ENV"
 
       - name: Import and validate project
         run: |
@@ -82,7 +85,7 @@ jobs:
       - name: Export Android APK
         run: |
           mkdir -p fps-game/build
-          godot --headless --path fps-game --export-debug "Android" fps-game/build/VOID-FRONTLINE-debug.apk
+          godot --headless --verbose --path fps-game --export-debug "Android" fps-game/build/VOID-FRONTLINE-debug.apk
 
       - name: Verify APK
         run: |
