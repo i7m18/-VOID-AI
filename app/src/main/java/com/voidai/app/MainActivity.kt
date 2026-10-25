@@ -120,13 +120,14 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         if (key.isBlank()) { callback("اضغط ربط AI وأضف مفتاح Gemini API أولاً."); return }
         Thread {
             val answer = try {
-                val models = listOf("gemini-3.8-flash", "gemini-3.6-flash")
+                val models = listOf("gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite")
                 var finalAnswer = ""
                 var completed = false
                 var lastBusyMessage = "خدمة Gemini مشغولة حالياً."
                 for (model in models) {
                     var attempt = 0
-                    while (attempt < if (model == models.first()) 2 else 1 && !completed) {
+                    val maxAttempts = if (model == models.first()) 2 else 1
+                    while (attempt < maxAttempts && !completed) {
                         attempt += 1
                         var connection: HttpURLConnection? = null
                         try {
@@ -233,9 +234,10 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 
     private fun runAgentTask(goal: String, callback: (String) -> Unit) {
         val history = mutableListOf<String>()
+        var consecutiveFailures = 0
         val handler = Handler(Looper.getMainLooper())
         fun step(index: Int) {
-            if (index >= 8) {
+            if (index >= 16) {
                 callback("وصلت حد خطوات التنفيذ الآمنة. اللي تم لحد الآن: " +
                     if (history.isEmpty()) "ما نفّذت خطوة." else history.takeLast(5).joinToString("، ") +
                     ". گدر تكلي أكمل من الشاشة الحالية.")
@@ -246,14 +248,16 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             val apps = installedAppLabels().joinToString(", ") { it.first }.take(1400)
             val prompt = listOf(
                 "أنت وكيل تحكم محلي داخل VOID AI على أندرويد. المطلوب من المستخدم: " + goal,
+                if (goal.contains("فيديو", true) || goal.contains("مونتاج", true) || goal.contains("CapCut", true)) "مهمة تحرير/تصميم فيديو: لا تعتبر فتح CapCut إنجازاً. افحص الشاشة، أنشئ مشروعاً عند توفر زر واضح، اختر الوسائط التي حدّدها المستخدم فقط، ونفّذ التحرير خطوة بخطوة. لا تخترع وسائط أو تدّع تصدير فيديو إذا لم يحدث فعلاً. إذا احتجت ملفاً أو اختياراً من المستخدم، اطلبه بوضوح." else "نفّذ المهمة المطلوبة قدر الإمكان على الشاشة الحالية، ولا تكتفِ بوصف ما ستفعله.",
                 "الخطوات المنفذة سابقاً: " + history.joinToString(" | ").ifBlank { "لا توجد" },
                 "الشاشة الحالية:\n" + screen,
                 "التطبيقات المثبتة التي يمكن فتحها:\n" + apps,
                 """قرر خطوة واحدة فقط حسب الشاشة والمطلوب، ثم أعد JSON صالحاً فقط بالشكل:
-{"action":"open_app|click|type|scroll_down|scroll_up|back|home|wait|done|needs_confirmation","target":"","text":"","message":""}
+{"action":"open_app|click|type|scroll_down|scroll_up|back|home|wait|done|needs_confirmation","target":"","text":"","message":"","wait_ms":1500}
 القواعد:
 - إذا كان المطلوب سؤالاً أو دردشة وليس تحكماً بالجهاز، أجب عبر action=done و message.
-- نفذ خطوة واحدة كل مرة؛ بعد كل خطوة ستصلك حالة الشاشة الجديدة.
+- نفذ خطوة واحدة كل مرة؛ بعد كل خطوة ستصلك حالة الشاشة الجديدة. استخدم wait عند تحميل واجهة أو مشروع، وحدد wait_ms بين 700 و5000 حسب الحاجة.
+- في مهام التصميم، ابدأ بإنشاء مشروع/اختيار ملف فقط إذا ظهر المسار بوضوح. لا تدّع اكتمال التصدير دون دليل مرئي.
 - open_app: target اسم التطبيق المثبت كما يظهر بالقائمة.
 - click: target نص زر أو تبويب ظاهر حرفياً أو قريب جداً منه.
 - type: text النص الذي طلب المستخدم كتابته، فقط بعد وجود حقل تحرير مناسب ومحدد. لا تكتب كلمات مرور أو رموز تحقق أو مفاتيح API أو بيانات بطاقة أو معلومات مالية حساسة.
@@ -299,18 +303,36 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                     else -> false
                 }
                 if (!success) {
-                    callback("ما قدرت أنفذ الخطوة «" + (if (target.isNotBlank()) target else action) + "». تأكد من تفعيل خدمة التحكم وأن العنصر ظاهر بالشاشة، أو نفّذ هالخطوة يدوياً.")
+                    consecutiveFailures += 1
+                    history.add("تعذر تنفيذ " + action + if (target.isNotBlank()) " على «" + target + "»" else "")
+                    if (consecutiveFailures >= 3 || index >= 15) {
+                        callback("توقفت بعد عدة محاولات غير ناجحة. آخر خطوة تعذرت: «" + (if (target.isNotBlank()) target else action) + "». تأكد من صلاحية التحكم وأن العنصر ظاهر، ثم أعد المحاولة.")
+                    } else {
+                        handler.postDelayed({ step(index + 1) }, 1000L)
+                    }
                     return@askGemini
                 }
+                consecutiveFailures = 0
                 history.add(action + if (target.isNotBlank()) "(" + target + ")" else if (textValue.isNotBlank()) "(نص)" else "")
-                handler.postDelayed({ step(index + 1) }, if (action == "wait") 700L else 450L)
+                val delayMs = when (action) {
+                    "open_app" -> 1800L
+                    "click" -> 950L
+                    "type" -> 700L
+                    "wait" -> parsed.optInt("wait_ms", 1500).coerceIn(700, 5000).toLong()
+                    else -> 800L
+                }
+                handler.postDelayed({ step(index + 1) }, delayMs)
             }, speakAnswer = false, agentPrompt = true)
+        }
+        if (VoidAccessibilityService.instance == null) {
+            callback("حتى أنفّذ مهمة متعددة الخطوات، فعّل خدمة VOID AI من زر «تحكم الشاشة» داخل تسهيلات الاستخدام ثم ارجع للتطبيق.")
+            return
         }
         if (getSharedPreferences("void_ai", MODE_PRIVATE).getString("gemini_api_key", "").isNullOrBlank()) {
             callback("اربط Gemini API أولاً من زر «ربط AI» حتى أقدر أخطط للخطوات.")
             return
         }
-        handler.postDelayed({ step(0) }, 1400L)
+        handler.postDelayed({ step(0) }, 700L)
     }
 
     private fun runCommand(raw: String): String {
@@ -404,7 +426,7 @@ private fun VoidAiApp(
         input = ""
         testStatus = "جاري تنفيذ الأمر..."
         val normalized = text.lowercase(Locale.ROOT)
-        val isDesignTask = listOf("صمم", "صمّم", "سوي فيديو", "سوّي فيديو", "سويلي فيديو", "مونتاج", "منتاج", "عدّل فيديو", "عدل فيديو", "ركب فيديو").any { normalized.contains(it) }
+        val isDesignTask = listOf("صمم فيديو", "صمّم فيديو", "صمملي فيديو", "صمّملي فيديو", "سوي فيديو", "سوّي فيديو", "سويلي فيديو", "سويلي مونتاج", "مونتاج", "منتاج", "عدّل فيديو", "عدل فيديو", "ركب فيديو", "اصنع فيديو", "أنشئ فيديو", "انشئ فيديو", "حرر فيديو", "تعديل الفيديو", "كاب كات", "capcut").any { normalized.contains(it) }
         val response = if (isDesignTask) onCommand("افتح CapCut") else onCommand(text)
         if (response.startsWith("أكدر أنفذ أوامر مباشرة") || isDesignTask) {
             thinking = true
@@ -443,7 +465,7 @@ private fun VoidAiApp(
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
                         Text("VOID AI", fontSize = 25.sp, color = Color.White, fontWeight = FontWeight.Black, letterSpacing = 1.6.sp)
-                        Text("NEURAL CONTROL  •  الإصدار 1.2", fontSize = 9.sp, color = cyan, letterSpacing = 1.sp)
+                        Text("NEURAL CONTROL  •  الإصدار 1.3", fontSize = 9.sp, color = cyan, letterSpacing = 1.sp)
                     }
                     Surface(color = Color(0xFF12312F), shape = RoundedCornerShape(30.dp), border = androidx.compose.foundation.BorderStroke(1.dp, cyan.copy(alpha = 0.35f))) {
                         Row(Modifier.padding(horizontal = 9.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
