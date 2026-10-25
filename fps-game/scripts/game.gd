@@ -33,6 +33,7 @@ var reticle_label: Label
 var menu_panel: PanelContainer
 var move_state := Vector2.ZERO
 var fire_held := false
+var hitmarker_left := 0.0
 
 func _ready() -> void:
  randomize()
@@ -46,10 +47,16 @@ func _ready() -> void:
  _build_hud()
  _show_main_menu()
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
  for child in hud_layer.get_children():
   if child.name == "TouchControls": child.visible = game_active
- if is_instance_valid(reticle_label): reticle_label.visible = game_active
+ if is_instance_valid(reticle_label):
+  reticle_label.visible = game_active
+  if hitmarker_left > 0.0:
+   hitmarker_left = maxf(0.0,hitmarker_left-delta)
+   if hitmarker_left == 0.0:
+    reticle_label.text = "＋"
+    reticle_label.add_theme_color_override("font_color",Color(0.58,1.0,0.78))
  if game_active and fire_held and is_instance_valid(player):
   player.fire()
 
@@ -686,6 +693,12 @@ func player_hit() -> void:
   col.add_child(_make_button("إعادة المحاولة",Callable(self,"_restart_mission")))
   col.add_child(_make_button("القائمة الرئيسية",Callable(self,"_show_main_menu")))
 
+func show_hitmarker() -> void:
+ if not is_instance_valid(reticle_label): return
+ reticle_label.text = "×"
+ reticle_label.add_theme_color_override("font_color",Color(1.0,0.36,0.20))
+ hitmarker_left = 0.13
+
 func _update_hud() -> void:
  if not is_instance_valid(player): return
  var mission: Dictionary = MISSIONS[mission_index]
@@ -696,4 +709,4 @@ func _update_hud() -> void:
   objective_label.text = "الهدف: "+str(mission["objective"])+" • أمّن المنطقة"
  else:
   objective_label.text = "الهدف: اقترب من العلامة واضغط «تفاعل»"
- status_label.text = "الصحة %d | الذخيرة %d | الأعداء %d | %s" % [player.health,player.get_current_ammo(),enemies_left,player.get_weapon_name()]
+ status_label.text = "الصحة %d  |  الذخيرة %d/%d  |  الأعداء %d  |  %s" % [player.health,player.get_current_ammo(),player.get_current_reserve_ammo(),enemies_left,player.get_weapon_name()]
