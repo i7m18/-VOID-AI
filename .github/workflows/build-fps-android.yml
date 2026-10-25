@@ -64,6 +64,15 @@ jobs:
           test -s fps-game/fonts/NotoSansArabic.ttf
           test -s fps-game/fonts/OFL.txt
 
+      - name: Download CC0 city building models
+        shell: bash
+        run: |
+          mkdir -p fps-game/assets/buildings
+          for model in building-a building-b building-c building-d building-e building-f; do
+            curl -L --fail --retry 3 "https://raw.githubusercontent.com/Hidencod/tge-assets/main/packs/city-kit-commercial/${model}.glb" -o "fps-game/assets/buildings/${model}.glb"
+            test -s "fps-game/assets/buildings/${model}.glb"
+          done
+
       - name: Configure Android debug signing and Godot SDK paths
         shell: bash
         run: |
