@@ -602,62 +602,129 @@ func _spawn_objective() -> void:
  objective_marker = Node3D.new()
  objective_marker.name = "MissionObjective"
  objective_marker.position = _objective_position()
- var base_mesh := MeshInstance3D.new()
- var base_shape := CylinderMesh.new()
- base_shape.top_radius = 0.95
- base_shape.bottom_radius = 1.15
- base_shape.height = 0.12
- base_mesh.mesh = base_shape
- var base_material := StandardMaterial3D.new()
- base_material.albedo_color = Color(0.10,0.16,0.14)
- base_material.metallic = 0.65
- base_material.roughness = 0.32
- base_mesh.material_override = base_material
- base_mesh.position.y = 0.06
- objective_marker.add_child(base_mesh)
- var beacon := MeshInstance3D.new()
- var beam_shape := CylinderMesh.new()
- beam_shape.top_radius = 0.12
- beam_shape.bottom_radius = 0.24
- beam_shape.height = 2.1
- beacon.mesh = beam_shape
- beacon.position.y = 1.12
- var beam_material := StandardMaterial3D.new()
- beam_material.albedo_color = Color(0.15,0.85,0.54)
- beam_material.emission_enabled = true
- beam_material.emission = Color(0.04,0.95,0.48)
- beam_material.emission_energy_multiplier = 2.0
- beam_material.metallic = 0.2
- beacon.material_override = beam_material
- objective_marker.add_child(beacon)
+ var base := MeshInstance3D.new()
+ var base_mesh := CylinderMesh.new()
+ base_mesh.top_radius = 0.72
+ base_mesh.bottom_radius = 0.82
+ base_mesh.height = 0.10
+ base.mesh = base_mesh
+ var base_mat := StandardMaterial3D.new()
+ base_mat.albedo_color = Color(0.12,0.14,0.12)
+ base_mat.metallic = 0.48
+ base_mat.roughness = 0.78
+ base.material_override = base_mat
+ base.position.y = 0.05
+ objective_marker.add_child(base)
+
+ # لكل فصل عنصر ميداني مختلف بدلاً من العمود الأخضر نفسه في كل مرة.
+ match mission_index:
+  0:
+   _add_objective_box(objective_marker,Vector3(0.86,0.94,0.56),Vector3(0,0.54,0),Color(0.17,0.21,0.17),0.36)
+   _add_objective_box(objective_marker,Vector3(0.48,0.27,0.035),Vector3(0,0.66,-0.30),Color(0.07,0.24,0.22),0.20,Color(0.08,0.70,0.42))
+   _add_objective_cylinder(objective_marker,0.025,0.9,Vector3(0.29,1.42,0.10),Color(0.10,0.12,0.10))
+  1:
+   _add_objective_box(objective_marker,Vector3(1.25,0.72,0.88),Vector3(0,0.40,0),Color(0.22,0.27,0.18),0.12)
+   _add_objective_box(objective_marker,Vector3(1.31,0.08,0.10),Vector3(0,0.41,-0.02),Color(0.08,0.10,0.09),0.52)
+   _add_objective_box(objective_marker,Vector3(0.10,0.76,0.92),Vector3(-0.43,0.40,0),Color(0.08,0.10,0.09),0.55)
+   _add_objective_box(objective_marker,Vector3(0.10,0.76,0.92),Vector3(0.43,0.40,0),Color(0.08,0.10,0.09),0.55)
+  2:
+   _add_objective_box(objective_marker,Vector3(0.96,0.66,0.52),Vector3(0,0.39,0),Color(0.18,0.23,0.20),0.32)
+   _add_objective_box(objective_marker,Vector3(0.60,0.26,0.045),Vector3(0,0.50,-0.29),Color(0.08,0.28,0.24),0.15,Color(0.08,0.65,0.38))
+   _add_objective_cylinder(objective_marker,0.035,0.55,Vector3(0.34,1.0,0.10),Color(0.12,0.14,0.12))
+  3:
+   for side in [-1.0,1.0]:
+    _add_objective_box(objective_marker,Vector3(0.52,1.35,0.54),Vector3(side*0.36,0.72,0),Color(0.11,0.14,0.15),0.58)
+    _add_objective_box(objective_marker,Vector3(0.36,0.40,0.035),Vector3(side*0.36,0.85,-0.29),Color(0.06,0.19,0.24),0.24,Color(0.05,0.38,0.72))
+  4:
+   _add_objective_box(objective_marker,Vector3(1.0,0.36,0.72),Vector3(0,0.25,0),Color(0.13,0.16,0.14),0.62)
+   _add_objective_box(objective_marker,Vector3(0.48,0.07,0.28),Vector3(0,0.47,0),Color(0.62,0.43,0.16),0.42)
+   _add_objective_box(objective_marker,Vector3(0.34,0.11,0.08),Vector3(0,0.57,-0.06),Color(0.10,0.26,0.20),0.15,Color(0.03,0.46,0.22))
+  5:
+   _add_objective_box(objective_marker,Vector3(0.84,0.78,0.60),Vector3(0,0.44,0),Color(0.15,0.18,0.15),0.46)
+   _add_objective_cylinder(objective_marker,0.045,1.55,Vector3(0.28,1.30,0.12),Color(0.11,0.13,0.12))
+   _add_objective_box(objective_marker,Vector3(0.28,0.08,0.24),Vector3(0.28,1.70,0.12),Color(0.23,0.27,0.21),0.55)
+  6:
+   _add_objective_box(objective_marker,Vector3(1.20,0.64,0.70),Vector3(0,0.37,0),Color(0.18,0.20,0.17),0.5)
+   _add_objective_box(objective_marker,Vector3(0.62,0.28,0.04),Vector3(0,0.51,-0.37),Color(0.23,0.08,0.06),0.22,Color(0.75,0.08,0.025))
+   _add_objective_cylinder(objective_marker,0.026,0.72,Vector3(-0.43,1.03,0.20),Color(0.08,0.10,0.09))
+  7:
+   _add_objective_box(objective_marker,Vector3(0.90,0.88,0.65),Vector3(0,0.50,0),Color(0.12,0.16,0.14),0.5)
+   for side in [-1.0,1.0]:
+    _add_objective_cylinder(objective_marker,0.025,1.35,Vector3(side*0.29,1.25,0.17),Color(0.07,0.10,0.09))
+   _add_objective_box(objective_marker,Vector3(0.48,0.23,0.04),Vector3(0,0.65,-0.34),Color(0.06,0.21,0.19),0.18,Color(0.05,0.55,0.35))
+  _:
+   _add_objective_box(objective_marker,Vector3(1.22,0.86,0.62),Vector3(0,0.50,0),Color(0.13,0.17,0.15),0.52)
+   _add_objective_box(objective_marker,Vector3(0.42,0.30,0.04),Vector3(-0.20,0.68,-0.33),Color(0.06,0.23,0.23),0.2,Color(0.03,0.72,0.44))
+   _add_objective_box(objective_marker,Vector3(0.42,0.30,0.04),Vector3(0.27,0.68,-0.33),Color(0.06,0.16,0.22),0.2,Color(0.03,0.32,0.75))
+   _add_objective_cylinder(objective_marker,0.025,1.20,Vector3(0.40,1.55,0.15),Color(0.08,0.10,0.09))
+
+ var lamp := MeshInstance3D.new()
+ var lamp_mesh := SphereMesh.new()
+ lamp_mesh.radius = 0.075
+ lamp_mesh.height = 0.15
+ lamp.mesh = lamp_mesh
+ lamp.position = Vector3(0,1.36,-0.35)
+ var lamp_mat := StandardMaterial3D.new()
+ lamp_mat.albedo_color = Color(1.0,0.67,0.18)
+ lamp_mat.emission_enabled = true
+ lamp_mat.emission = Color(0.95,0.40,0.05)
+ lamp_mat.emission_energy_multiplier = 1.4
+ lamp.material_override = lamp_mat
+ objective_marker.add_child(lamp)
  var light := OmniLight3D.new()
- light.position.y = 1.7
- light.light_color = Color(0.12,1.0,0.58)
- light.light_energy = 1.8
- light.omni_range = 7.0
+ light.position = Vector3(0,1.42,-0.35)
+ light.light_color = Color(1.0,0.56,0.15)
+ light.light_energy = 0.65
+ light.omni_range = 3.5
  objective_marker.add_child(light)
- var label := _label("الهدف",16,Color(0.55,1.0,0.77))
- label.position = Vector2(-55,-70)
- label.size = Vector2(110,28)
- label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
- label.rotation = 0
- var label_pivot := Sprite3D.new()
- label_pivot.name = "ObjectiveMarkerBillboard"
- label_pivot.position.y = 2.6
+
  var text_mesh := TextMesh.new()
  text_mesh.text = "الهدف"
  if arabic_font != null: text_mesh.font = arabic_font
- text_mesh.font_size = 48
- text_mesh.depth = 0.01
+ text_mesh.font_size = 40
+ text_mesh.depth = 0.005
  var text_node := MeshInstance3D.new()
  text_node.mesh = text_mesh
  var text_material := StandardMaterial3D.new()
- text_material.albedo_color = Color(0.6,1.0,0.78)
+ text_material.albedo_color = Color(1.0,0.78,0.30)
  text_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
  text_node.material_override = text_material
- text_node.position.y = 2.7
+ text_node.position = Vector3(-0.36,1.95,0)
  objective_marker.add_child(text_node)
  world_root.add_child(objective_marker)
+
+func _add_objective_box(parent: Node3D, dimensions: Vector3, local_position: Vector3, color: Color, metallic: float=0.1, glow: Color=Color(0,0,0)) -> void:
+ var node := MeshInstance3D.new()
+ var cube := BoxMesh.new()
+ cube.size = dimensions
+ node.mesh = cube
+ node.position = local_position
+ var mat := StandardMaterial3D.new()
+ mat.albedo_color = color
+ mat.metallic = metallic
+ mat.roughness = 0.68
+ if glow.length() > 0.01:
+  mat.emission_enabled = true
+  mat.emission = glow
+  mat.emission_energy_multiplier = 1.2
+ node.material_override = mat
+ parent.add_child(node)
+
+func _add_objective_cylinder(parent: Node3D, radius: float, height: float, local_position: Vector3, color: Color) -> void:
+ var node := MeshInstance3D.new()
+ var shape := CylinderMesh.new()
+ shape.top_radius = radius
+ shape.bottom_radius = radius
+ shape.height = height
+ shape.radial_segments = 8
+ node.mesh = shape
+ node.position = local_position
+ var mat := StandardMaterial3D.new()
+ mat.albedo_color = color
+ mat.metallic = 0.48
+ mat.roughness = 0.6
+ node.material_override = mat
+ parent.add_child(node)
 
 func _spawn_enemies() -> void:
  enemies_left = int(MISSIONS[mission_index]["enemies"])
