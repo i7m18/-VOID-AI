@@ -51,17 +51,38 @@ class VoidAccessibilityService : AccessibilityService() {
 
     fun clickText(text: String): Boolean {
         if (text.isBlank()) return false
-        val roots = listOfNotNull(rootInActiveWindow)
-        for (root in roots) {
-            val nodes = root.findAccessibilityNodeInfosByText(text)
-            for (node in nodes) {
-                var target: AccessibilityNodeInfo? = node
-                while (target != null && !target.isClickable) target = target.parent
-                if (target?.performAction(AccessibilityNodeInfo.ACTION_CLICK) == true) return true
+        val root = rootInActiveWindow ?: return false
+        val wanted = normalizeLabel(text)
+        val candidates = mutableListOf<AccessibilityNodeInfo>()
+        fun walk(node: AccessibilityNodeInfo, depth: Int) {
+            if (depth > 20 || candidates.size > 350) return
+            val label = normalizeLabel(
+                listOfNotNull(node.text?.toString(), node.contentDescription?.toString())
+                    .joinToString(" ")
+            )
+            if (label.isNotBlank() && (label == wanted || label.contains(wanted) || wanted.contains(label) && label.length >= 3)) {
+                candidates.add(node)
             }
+            for (i in 0 until node.childCount) {
+                val child = node.getChild(i) ?: continue
+                walk(child, depth + 1)
+            }
+        }
+        walk(root, 0)
+        for (node in candidates) {
+            var target: AccessibilityNodeInfo? = node
+            while (target != null && !target.isClickable) target = target.parent
+            if (target?.performAction(AccessibilityNodeInfo.ACTION_CLICK) == true) return true
         }
         return false
     }
+
+    private fun normalizeLabel(value: String): String = value
+        .lowercase(java.util.Locale.ROOT)
+        .replace("أ", "ا").replace("إ", "ا").replace("آ", "ا")
+        .replace("ى", "ي").replace("ة", "ه")
+        .replace(Regex("[\\s\\p{Punct}،؛:!؟]+"), "")
+
     fun setFocusedText(text: String): Boolean {
         val root = rootInActiveWindow ?: return false
         val node = findFocused(root) ?: return false
