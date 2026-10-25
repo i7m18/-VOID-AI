@@ -9,8 +9,8 @@ android {
         applicationId = "com.voidai.app"
         minSdk = 23
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.1"
+        versionCode = 3
+        versionName = "1.2"
     }
     buildFeatures { compose = true }
     composeOptions { kotlinCompilerExtensionVersion = "1.5.15" }
