@@ -9,9 +9,17 @@ var speed := 2.0
 var alert_range := 42.0
 var strafe_sign := 1.0
 var preferred_distance := 14.0
+var shot_audio: AudioStreamPlayer3D
 
 func _ready() -> void:
  add_to_group("hostile")
+ shot_audio = AudioStreamPlayer3D.new()
+ shot_audio.name = "EnemyWeaponAudio"
+ shot_audio.stream = load("res://assets/audio/rifle_shot.wav") as AudioStream
+ shot_audio.volume_db = -9.0
+ shot_audio.max_distance = 58.0
+ shot_audio.unit_size = 8.0
+ add_child(shot_audio)
  var has_character_model := _build_character_model()
  var vest_mat := StandardMaterial3D.new()
  vest_mat.albedo_color = Color(0.10,0.14,0.12)
@@ -202,6 +210,9 @@ func _try_attack(distance: float) -> void:
  var hit := get_world_3d().direct_space_state.intersect_ray(query)
  if hit.is_empty() or hit.get("collider") != player:
   return
+ if is_instance_valid(shot_audio):
+  shot_audio.pitch_scale = randf_range(0.88,1.12)
+  shot_audio.play()
  if player.has_method("take_damage"):
   player.take_damage(4 if distance>22.0 else (6 if distance>12.0 else 8))
 
