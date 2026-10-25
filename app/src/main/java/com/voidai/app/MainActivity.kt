@@ -86,6 +86,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                         .apply()
                 },
                 hasAiConnection = { hasAiConnection() },
+                onLoadBackend = { Pair(getStoredBackendUrl(), getStoredBackendToken()) },
                 onListen = { callback -> startListening(callback) },
                 onSpeak = { say(it) },
                 onAccessibility = { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
@@ -770,6 +771,7 @@ private fun VoidAiApp(
     onGenerateImage: (String, (String) -> Unit) -> Unit,
     onSaveBackend: (String, String) -> Unit,
     hasAiConnection: () -> Boolean,
+    onLoadBackend: () -> Pair<String, String>,
     onListen: ((String) -> Unit) -> Unit,
     onSpeak: (String) -> Unit,
     onAccessibility: () -> Unit
@@ -951,8 +953,9 @@ private fun VoidAiApp(
                     ) { Text("اختبار AI", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
                     OutlinedButton(
                         onClick = {
-                            backendUrlInput = getStoredBackendUrl()
-                            backendTokenInput = getStoredBackendToken()
+                            val currentBackend = onLoadBackend()
+                            backendUrlInput = currentBackend.first
+                            backendTokenInput = currentBackend.second
                             backendDialog = true
                         },
                         modifier = Modifier.weight(1f).height(42.dp),
@@ -1083,7 +1086,7 @@ private fun VoidAiApp(
                         Text("خادم AI: " + if (hasAiConnection()) "مربوط" else "غير مربوط", color = Color.White, fontSize = 12.sp)
                         Text("خدمة الشاشة: " + if (VoidAccessibilityService.instance != null) "مفعلة" else "غير مفعلة", color = Color.White, fontSize = 12.sp)
                         TextButton(onClick = { showSettings = false; onAccessibility() }) { Text("إعدادات التحكم") }
-                        TextButton(onClick = { showSettings = false; backendUrlInput = getStoredBackendUrl(); backendTokenInput = getStoredBackendToken(); backendDialog = true }) { Text("إعدادات الذكاء الاصطناعي") }
+                        TextButton(onClick = { val currentBackend = onLoadBackend(); showSettings = false; backendUrlInput = currentBackend.first; backendTokenInput = currentBackend.second; backendDialog = true }) { Text("إعدادات الذكاء الاصطناعي") }
                         TextButton(onClick = { showSettings = false }) { Text("إغلاق") }
                     }
                 }
