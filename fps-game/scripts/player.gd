@@ -25,6 +25,13 @@ var muzzle_light: OmniLight3D
 var muzzle_flash_remaining := 0.0
 var recoil_pitch := 0.0
 var shot_audio: AudioStreamPlayer3D
+var body_collider: CollisionShape3D
+var body_capsule: CapsuleShape3D
+var aiming := false
+var sprinting := false
+var crouched := false
+var grenades := 3
+var arm_group: Node3D
 
 func _ready() -> void:
  add_to_group("player")
@@ -33,6 +40,8 @@ func _ready() -> void:
  capsule.radius=0.42
  capsule.height=1.8
  collider.shape=capsule
+ body_collider = collider
+ body_capsule = capsule
  add_child(collider)
  camera=Camera3D.new()
  camera.position=Vector3(0,0.55,0)
@@ -44,6 +53,7 @@ func _ready() -> void:
  ray.add_exception(self)
  camera.add_child(ray)
  _build_weapon_model()
+ _build_view_arms()
  _build_muzzle_effect()
  _build_shot_audio()
 
@@ -57,6 +67,74 @@ func _process(delta: float) -> void:
   var recover := minf(recoil_pitch,delta*0.42)
   camera.rotation.x = clampf(camera.rotation.x+recover,-1.48,1.48)
   recoil_pitch -= recover
+
+func _build_view_arms() -> void:
+ # أكمام عسكرية وقفازات ظاهرة في منظور الشخص الأول لإحساس سلاح محمول باليد.
+ arm_group = Node3D.new()
+ arm_group.name = "FirstPersonArms"
+ camera.add_child(arm_group)
+ var sleeve_mat := StandardMaterial3D.new()
+ sleeve_mat.albedo_color = Color(0.18,0.22,0.16)
+ sleeve_mat.roughness = 0.95
+ var glove_mat := StandardMaterial3D.new()
+ glove_mat.albedo_color = Color(0.045,0.055,0.045)
+ glove_mat.roughness = 0.88
+ for side in [-1.0,1.0]:
+  var sleeve := MeshInstance3D.new()
+  var sleeve_mesh := CapsuleMesh.new()
+  sleeve_mesh.radius = 0.115
+  sleeve_mesh.height = 0.66
+  sleeve.mesh = sleeve_mesh
+  sleeve.material_override = sleeve_mat
+  if side < 0:
+   sleeve.position = Vector3(-0.23,-0.53,-0.39)
+   sleeve.rotation = Vector3(deg_to_rad(-32),0,deg_to_rad(-26))
+  else:
+   sleeve.position = Vector3(0.45,-0.51,-0.20)
+   sleeve.rotation = Vector3(deg_to_rad(-38),0,deg_to_rad(18))
+  arm_group.add_child(sleeve)
+  var glove := MeshInstance3D.new()
+  var glove_mesh := SphereMesh.new()
+  glove_mesh.radius = 0.12
+  glove_mesh.height = 0.18
+  glove_mesh.radial_segments = 8
+  glove.mesh = glove_mesh
+  glove.material_override = glove_mat
+  glove.position = Vector3(-0.03,-0.27,-0.67) if side < 0 else Vector3(0.31,-0.29,-0.55)
+  arm_group.add_child(glove)
+
+func set_aiming(enabled: bool) -> void:
+ aiming = enabled
+ _update_aim_state()
+
+func _update_aim_state() -> void:
+ if not is_instance_valid(camera): return
+ camera.fov = 48.0 if aiming else 78.0
+ if is_instance_valid(weapon_model):
+  weapon_model.position = Vector3(0.15,-0.19,-0.48) if aiming else Vector3(0.30,-0.27,-0.58)
+
+func set_sprinting(enabled: bool) -> void:
+ sprinting = enabled and not crouched and not in_vehicle
+
+func toggle_crouch() -> void:
+ crouched = not crouched
+ if crouched: sprinting = false
+ if is_instance_valid(body_capsule): body_capsule.height = 1.25 if crouched else 1.8
+ if is_instance_valid(body_collider): body_collider.position.y = -0.26 if crouched else 0.0
+ if is_instance_valid(camera): camera.position.y = 0.18 if crouched else 0.55
+
+func throw_grenade() -> void:
+ if grenades <= 0:
+  var root := get_tree().current_scene
+  if is_instance_valid(root) and root.has_method("show_message"):
+   root.show_message("نفدت القنابل اليدوية")
+  return
+ var root := get_tree().current_scene
+ if not is_instance_valid(root) or not bool(root.get("game_active")): return
+ if root.has_method("throw_grenade"):
+  grenades -= 1
+  root.throw_grenade(camera.global_position,camera.global_basis.z * -1.0,self)
+  _update_hud()
 
 func _build_muzzle_effect() -> void:
  muzzle_flash = MeshInstance3D.new()
@@ -230,32 +308,43 @@ func _collect_weapon_bounds(root_node: Node3D, current: Node, bounds: Array) -> 
   _collect_weapon_bounds(root_node,child,bounds)
 
 func _unhandled_input(event: InputEvent) -> void:
- if event is InputEventKey and event.pressed:
-  if event.keycode==KEY_ESCAPE:
-   Input.mouse_mode=Input.MOUSE_MODE_VISIBLE
-  elif event.keycode==KEY_R:
+ if event is InputEventKey:
+  if event.keycode == KEY_SHIFT:
+   set_sprinting(event.pressed)
+  if not event.pressed: return
+  if event.keycode == KEY_ESCAPE:
+   Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+  elif event.keycode == KEY_R:
    reload_weapon()
-  elif event.keycode==KEY_Q:
+  elif event.keycode == KEY_Q:
    switch_weapon()
-  elif event.keycode==KEY_E:
+  elif event.keycode == KEY_E:
    toggle_vehicle()
-  elif event.keycode==KEY_F:
+  elif event.keycode == KEY_F:
    var root = get_tree().current_scene
    if is_instance_valid(root) and root.has_method("interact_objective"):
     root.interact_objective()
-  elif event.keycode==KEY_1:
+  elif event.keycode == KEY_G:
+   throw_grenade()
+  elif event.keycode == KEY_C:
+   toggle_crouch()
+  elif event.keycode == KEY_1:
    _set_weapon(0)
-  elif event.keycode==KEY_2:
+  elif event.keycode == KEY_2:
    _set_weapon(1)
-  elif event.keycode==KEY_3:
+  elif event.keycode == KEY_3:
    _set_weapon(2)
- if event is InputEventMouseButton and event.pressed and event.button_index==MOUSE_BUTTON_LEFT:
-  Input.mouse_mode=Input.MOUSE_MODE_CAPTURED
-  fire()
+ if event is InputEventMouseButton:
+  if event.button_index == MOUSE_BUTTON_RIGHT:
+   set_aiming(event.pressed)
+  elif event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+   Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+   fire()
 
 func look_by(relative: Vector2) -> void:
- rotate_y(-relative.x*MOUSE_SENSITIVITY)
- camera.rotate_x(-relative.y*MOUSE_SENSITIVITY)
+ var sensitivity := MOUSE_SENSITIVITY * (0.62 if aiming else 1.0)
+ rotate_y(-relative.x*sensitivity)
+ camera.rotate_x(-relative.y*sensitivity)
  camera.rotation.x=clamp(camera.rotation.x,-1.48,1.48)
 
 func _physics_process(delta: float) -> void:
@@ -272,7 +361,7 @@ func _physics_process(delta: float) -> void:
  var keys:=Vector2(float(Input.is_key_pressed(KEY_D))-float(Input.is_key_pressed(KEY_A)),float(Input.is_key_pressed(KEY_W))-float(Input.is_key_pressed(KEY_S)))
  if keys.length()>0: move_input=keys.normalized()
  var direction: Vector3=(transform.basis*Vector3(move_input.x,0,-move_input.y)).normalized()
- var speed:=CAR_SPEED if in_vehicle else WALK_SPEED
+ var speed:=CAR_SPEED if in_vehicle else WALK_SPEED*(1.55 if sprinting else (0.70 if crouched else 1.0))
  velocity.x=direction.x*speed
  velocity.z=direction.z*speed
  if Input.is_key_pressed(KEY_SPACE) and is_on_floor() and not in_vehicle:
@@ -316,6 +405,7 @@ func switch_weapon() -> void:
 func _set_weapon(index: int) -> void:
  weapon_index=clampi(index,0,WEAPON_NAMES.size()-1)
  _update_weapon_model()
+ _update_aim_state()
  _refresh_weapon_audio()
  reloading=false
  reload_token+=1
