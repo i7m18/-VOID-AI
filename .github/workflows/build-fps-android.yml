@@ -76,6 +76,10 @@ jobs:
           echo "GODOT_ANDROID_KEYSTORE_DEBUG_PATH=$HOME/.android/debug.keystore" >> "$GITHUB_ENV"
           echo "GODOT_ANDROID_KEYSTORE_DEBUG_USER=androiddebugkey" >> "$GITHUB_ENV"
           echo "GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD=android" >> "$GITHUB_ENV"
+          sed -i "s|^keystore/debug=\"\"$|keystore/debug=\"$HOME/.android/debug.keystore\"|" fps-game/export_presets.cfg
+          sed -i 's|^keystore/debug_user=\"\"$|keystore/debug_user=\"androiddebugkey\"|' fps-game/export_presets.cfg
+          sed -i 's|^keystore/debug_password=\"\"$|keystore/debug_password=\"android\"|' fps-game/export_presets.cfg
+          grep -E "^keystore/debug" fps-game/export_presets.cfg
 
       - name: Import and validate project
         run: |
