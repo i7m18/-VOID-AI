@@ -235,7 +235,7 @@ func _physics_process(delta: float) -> void:
 
 func _try_attack(distance: float) -> void:
  if attack_cooldown>0 or distance>alert_range: return
- attack_cooldown=randf_range(1.1,1.8)
+ attack_cooldown=randf_range(1.5,2.3)
  # لا يصيب العدو اللاعب خلف الجدران: يجب أن يمر خط الرمي مباشرة إلى اللاعب.
  var from_point := global_position + Vector3(0,0.92,0)
  var to_point: Vector3 = player.global_position + Vector3(0,0.7,0)
@@ -249,12 +249,12 @@ func _try_attack(distance: float) -> void:
  if is_instance_valid(muzzle_light): muzzle_light.visible = true
  var root := get_tree().current_scene
  if is_instance_valid(root) and root.has_method("spawn_tracer"):
-  root.spawn_tracer(from_point-to_point.normalized()*-0.5,to_point)
+  root.spawn_tracer(from_point+(to_point-from_point).normalized()*0.45,to_point)
  if is_instance_valid(shot_audio):
   shot_audio.pitch_scale = randf_range(0.88,1.12)
   shot_audio.play()
  if player.has_method("take_damage"):
-  player.take_damage(4 if distance>22.0 else (6 if distance>12.0 else 8))
+  player.take_damage(3 if distance>22.0 else (4 if distance>12.0 else 6))
 
 func dark_boot_material() -> StandardMaterial3D:
  var boot_mat := StandardMaterial3D.new()
