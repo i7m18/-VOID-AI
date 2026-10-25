@@ -86,14 +86,28 @@ func _build_muzzle_effect() -> void:
  camera.add_child(muzzle_light)
 
 func _build_shot_audio() -> void:
- # صوت إطلاق قصير مولّد داخل اللعبة لتجنب الاعتماد على ملف خارجي.
+ shot_audio = AudioStreamPlayer3D.new()
+ shot_audio.name = "WeaponAudio"
+ shot_audio.volume_db = -3.5
+ shot_audio.max_distance = 75.0
+ shot_audio.unit_size = 8.0
+ add_child(shot_audio)
+ _refresh_weapon_audio()
+
+func _refresh_weapon_audio() -> void:
+ if not is_instance_valid(shot_audio): return
+ var path := "res://assets/audio/sniper_shot.wav" if weapon_index == 2 else "res://assets/audio/rifle_shot.wav"
+ var actual_stream := load(path) as AudioStream
+ if actual_stream != null:
+  shot_audio.stream = actual_stream
+  return
+ # أصوات احتياطية إذا فشل تنزيل أحد الملفات الصوتية.
  var wav := AudioStreamWAV.new()
  wav.mix_rate = 22050
  wav.format = AudioStreamWAV.FORMAT_16_BITS
  wav.stereo = false
  var pcm := PackedByteArray()
- var count := 3308
- for i in range(count):
+ for i in range(3308):
   var t := float(i)/float(wav.mix_rate)
   var envelope := exp(-t*35.0)
   var low := sin(TAU*95.0*t)*0.45
@@ -102,12 +116,7 @@ func _build_shot_audio() -> void:
   pcm.append(sample & 0xff)
   pcm.append((sample >> 8) & 0xff)
  wav.data = pcm
- shot_audio = AudioStreamPlayer3D.new()
  shot_audio.stream = wav
- shot_audio.volume_db = -8.0
- shot_audio.max_distance = 65.0
- shot_audio.unit_size = 8.0
- add_child(shot_audio)
 
 func _build_weapon_model() -> void:
  weapon_model = Node3D.new()
@@ -307,6 +316,7 @@ func switch_weapon() -> void:
 func _set_weapon(index: int) -> void:
  weapon_index=clampi(index,0,WEAPON_NAMES.size()-1)
  _update_weapon_model()
+ _refresh_weapon_audio()
  reloading=false
  reload_token+=1
  _update_hud()
