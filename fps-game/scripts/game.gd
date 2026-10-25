@@ -263,8 +263,10 @@ func _build_world() -> void:
  var world_environment := WorldEnvironment.new()
  var environment := Environment.new()
  var sky_material := ProceduralSkyMaterial.new()
- sky_material.sky_top_color = Color(0.035,0.075,0.12)
- sky_material.sky_horizon_color = Color(0.66,0.47,0.30)
+ var sky_tops := [Color(0.035,0.075,0.12),Color(0.18,0.25,0.34),Color(0.10,0.14,0.19),Color(0.025,0.035,0.055),Color(0.05,0.07,0.12),Color(0.24,0.25,0.25),Color(0.025,0.035,0.06),Color(0.055,0.075,0.13),Color(0.12,0.17,0.24)]
+ var sky_horizons := [Color(0.66,0.47,0.30),Color(0.72,0.58,0.40),Color(0.40,0.38,0.32),Color(0.14,0.18,0.22),Color(0.23,0.28,0.33),Color(0.58,0.48,0.34),Color(0.12,0.15,0.20),Color(0.32,0.35,0.37),Color(0.82,0.58,0.34)]
+ sky_material.sky_top_color = sky_tops[mission_index%sky_tops.size()]
+ sky_material.sky_horizon_color = sky_horizons[mission_index%sky_horizons.size()]
  sky_material.sky_curve = 0.18
  sky_material.ground_bottom_color = Color(0.045,0.052,0.045)
  sky_material.ground_horizon_color = Color(0.35,0.28,0.20)
@@ -276,11 +278,11 @@ func _build_world() -> void:
  environment.background_mode = Environment.BG_SKY
  environment.sky = sky
  environment.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
- environment.ambient_light_energy = 0.72
+ environment.ambient_light_energy = [0.72,0.82,0.56,0.34,0.48,0.86,0.31,0.46,0.92][mission_index]
  environment.tonemap_mode = Environment.TONE_MAPPER_FILMIC
  environment.fog_enabled = true
- environment.fog_light_color = Color(0.43,0.34,0.25)
- environment.fog_density = 0.0011
+ environment.fog_light_color = sky_horizons[mission_index%sky_horizons.size()].darkened(0.12)
+ environment.fog_density = 0.0020 if mission_index == 6 else (0.0016 if mission_index == 2 else 0.0010)
  world_environment.environment = environment
  world_root.add_child(world_environment)
  var ground := StaticBody3D.new()
@@ -339,8 +341,25 @@ void fragment() {
   [Vector3(-43,0,-27),Vector3(10,11,11),Color(0.26,0.27,0.26)],
   [Vector3(43,0,-33),Vector3(12,9,10),Color(0.27,0.29,0.28)]
  ]
+ # تدوير مواقع المباني بين الفصول يجعل كل اشتباك بتوزيع ميداني مختلف.
+ var rotation_amount := float(mission_index)*0.115
+ var objective_xz := Vector2(_objective_position().x,_objective_position().z)
+ var spawn_xz := Vector2(3,16)
  for site in building_sites:
-  _add_building(site[0],site[1],site[2])
+  var base_pos: Vector3 = site[0]
+  var building_size: Vector3 = site[1]
+  var coordinates := Vector2(base_pos.x,base_pos.z).rotated(rotation_amount)
+  if coordinates.distance_to(objective_xz) < 13.5:
+   var away := coordinates-objective_xz
+   if away.length() < 0.01: away = Vector2(1,0)
+   coordinates = objective_xz+away.normalized()*15.0
+  if coordinates.distance_to(spawn_xz) < 11.0:
+   var away_spawn := coordinates-spawn_xz
+   if away_spawn.length() < 0.01: away_spawn = Vector2(-1,0)
+   coordinates = spawn_xz+away_spawn.normalized()*12.5
+  coordinates.x = clampf(coordinates.x,-47.0,47.0)
+  coordinates.y = clampf(coordinates.y,-47.0,47.0)
+  _add_building(Vector3(coordinates.x,0,coordinates.y),building_size,site[2])
  # حواجز خرسانية وأكياس رمل وصناديق ذخيرة لتوفير غطاء تكتيكي.
  for i in range(10):
   var bx := -8.5 + float(i)*1.8
@@ -366,11 +385,53 @@ void fragment() {
  _add_structure(Vector3(-10,2,-40),Vector3(2,4,18),Color(0.16,0.20,0.19))
  _add_structure(Vector3(10,2,-40),Vector3(2,4,18),Color(0.16,0.20,0.19))
  var sun := DirectionalLight3D.new()
- sun.rotation_degrees = Vector3(-55,-25,0)
- sun.light_energy = 1.25
- sun.light_color = Color(1.0,0.78,0.58)
+ var sun_angles := [Vector3(-55,-25,0),Vector3(-39,-12,0),Vector3(-24,28,0),Vector3(-8,-18,0),Vector3(-14,45,0),Vector3(-45,-42,0),Vector3(-5,20,0),Vector3(-22,5,0),Vector3(-61,-35,0)]
+ var sun_energies := [1.25,1.05,0.8,0.55,0.72,1.05,0.48,0.68,1.35]
+ sun.rotation_degrees = sun_angles[mission_index]
+ sun.light_energy = sun_energies[mission_index]
+ sun.light_color = sky_horizons[mission_index%sky_horizons.size()].lerp(Color(1.0,0.88,0.70),0.38)
  sun.shadow_enabled = true
+ sun.directional_shadow_max_distance = 85.0
  world_root.add_child(sun)
+ _add_smoke_plume(Vector3(-15.0,1.5,-22.0))
+ _add_smoke_plume(Vector3(18.0,1.2,-31.0))
+
+func _add_smoke_plume(pos: Vector3) -> void:
+ var particles := GPUParticles3D.new()
+ particles.name = "BattlefieldSmoke"
+ particles.position = pos
+ particles.amount = 22
+ particles.lifetime = 4.5
+ particles.preprocess = 2.0
+ particles.emitting = true
+ particles.fixed_fps = 30
+ particles.visibility_aabb = AABB(Vector3(-4,-1,-4),Vector3(8,12,8))
+ var process := ParticleProcessMaterial.new()
+ process.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
+ process.emission_sphere_radius = 0.85
+ process.direction = Vector3(0,1,0)
+ process.spread = 18.0
+ process.initial_velocity_min = 0.6
+ process.initial_velocity_max = 1.8
+ process.gravity = Vector3(0,0.35,0)
+ process.scale_min = 0.6
+ process.scale_max = 1.45
+ process.color = Color(0.23,0.24,0.23,0.42)
+ particles.process_material = process
+ var smoke_material := StandardMaterial3D.new()
+ smoke_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+ smoke_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+ smoke_material.albedo_color = Color(0.22,0.23,0.22,0.34)
+ smoke_material.roughness = 1.0
+ smoke_material.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+ var smoke_mesh := SphereMesh.new()
+ smoke_mesh.radius = 0.65
+ smoke_mesh.height = 1.3
+ smoke_mesh.radial_segments = 8
+ smoke_mesh.rings = 5
+ smoke_mesh.material = smoke_material
+ particles.draw_pass_1 = smoke_mesh
+ world_root.add_child(particles)
 
 func _add_building(pos: Vector3, size: Vector3, color: Color) -> void:
  # Collision physique indépendante des ressources graphiques importées.
@@ -703,7 +764,7 @@ func _add_objective_box(parent: Node3D, dimensions: Vector3, local_position: Vec
  mat.albedo_color = color
  mat.metallic = metallic
  mat.roughness = 0.68
- if glow.length() > 0.01:
+ if glow != Color(0,0,0):
   mat.emission_enabled = true
   mat.emission = glow
   mat.emission_energy_multiplier = 1.2
