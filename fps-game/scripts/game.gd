@@ -54,15 +54,17 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
  for child in hud_layer.get_children():
-  if child.name == "TouchControls": child.visible = game_active
+  if child.name == "TouchControls":
+   child.visible = game_active
  if is_instance_valid(reticle_label):
   reticle_label.visible = game_active
- if is_instance_valid(radar_control): radar_control.visible = game_active
   if hitmarker_left > 0.0:
    hitmarker_left = maxf(0.0,hitmarker_left-delta)
    if hitmarker_left == 0.0:
     reticle_label.text = "＋"
     reticle_label.add_theme_color_override("font_color",Color(0.58,1.0,0.78))
+ if is_instance_valid(radar_control):
+  radar_control.visible = game_active
  if game_active and fire_held and is_instance_valid(player):
   player.fire()
 
