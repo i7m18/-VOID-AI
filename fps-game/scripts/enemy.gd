@@ -10,6 +10,9 @@ var alert_range := 42.0
 var strafe_sign := 1.0
 var preferred_distance := 14.0
 var shot_audio: AudioStreamPlayer3D
+var muzzle_flash: MeshInstance3D
+var muzzle_light: OmniLight3D
+var muzzle_timer := 0.0
 
 func _ready() -> void:
  add_to_group("hostile")
@@ -119,6 +122,30 @@ func _ready() -> void:
  rifle_mat.metallic = 0.42
  rifle.material_override = rifle_mat
  add_child(rifle)
+ muzzle_flash = MeshInstance3D.new()
+ var flash_mesh := SphereMesh.new()
+ flash_mesh.radius = 0.075
+ flash_mesh.height = 0.15
+ flash_mesh.radial_segments = 6
+ flash_mesh.rings = 3
+ muzzle_flash.mesh = flash_mesh
+ muzzle_flash.position = Vector3(0.42,0.02,-0.67)
+ var flash_mat := StandardMaterial3D.new()
+ flash_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+ flash_mat.albedo_color = Color(1.0,0.48,0.13)
+ flash_mat.emission_enabled = true
+ flash_mat.emission = Color(1.0,0.32,0.05)
+ flash_mat.emission_energy_multiplier = 3.0
+ muzzle_flash.material_override = flash_mat
+ muzzle_flash.visible = false
+ add_child(muzzle_flash)
+ muzzle_light = OmniLight3D.new()
+ muzzle_light.position = Vector3(0.42,0.02,-0.67)
+ muzzle_light.light_color = Color(1.0,0.4,0.12)
+ muzzle_light.light_energy = 2.2
+ muzzle_light.omni_range = 3.2
+ muzzle_light.visible = false
+ add_child(muzzle_light)
 
  var collision := CollisionShape3D.new()
  var shape := CapsuleShape3D.new()
@@ -173,6 +200,13 @@ func _collect_character_bounds(root_node: Node3D, current: Node, bounds: Array) 
  for child in current.get_children():
   _collect_character_bounds(root_node,child,bounds)
 
+func _process(delta: float) -> void:
+ if muzzle_timer > 0.0:
+  muzzle_timer = maxf(0.0,muzzle_timer-delta)
+  var visible_now := muzzle_timer > 0.0
+  if is_instance_valid(muzzle_flash): muzzle_flash.visible = visible_now
+  if is_instance_valid(muzzle_light): muzzle_light.visible = visible_now
+
 func _physics_process(delta: float) -> void:
  if not is_instance_valid(player): return
  var root:=get_tree().current_scene
@@ -210,6 +244,12 @@ func _try_attack(distance: float) -> void:
  var hit := get_world_3d().direct_space_state.intersect_ray(query)
  if hit.is_empty() or hit.get("collider") != player:
   return
+ muzzle_timer = 0.055
+ if is_instance_valid(muzzle_flash): muzzle_flash.visible = true
+ if is_instance_valid(muzzle_light): muzzle_light.visible = true
+ var root := get_tree().current_scene
+ if is_instance_valid(root) and root.has_method("spawn_tracer"):
+  root.spawn_tracer(from_point-to_point.normalized()*-0.5,to_point)
  if is_instance_valid(shot_audio):
   shot_audio.pitch_scale = randf_range(0.88,1.12)
   shot_audio.play()
