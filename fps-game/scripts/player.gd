@@ -19,6 +19,11 @@ var ray: RayCast3D
 var weapon_model: Node3D
 var fire_timer := 0.0
 var reload_token := 0
+var muzzle_flash: MeshInstance3D
+var muzzle_light: OmniLight3D
+var muzzle_flash_remaining := 0.0
+var recoil_pitch := 0.0
+var shot_audio: AudioStreamPlayer3D
 
 func _ready() -> void:
  add_to_group("player")
@@ -38,6 +43,70 @@ func _ready() -> void:
  ray.add_exception(self)
  camera.add_child(ray)
  _build_weapon_model()
+ _build_muzzle_effect()
+ _build_shot_audio()
+
+func _process(delta: float) -> void:
+ if muzzle_flash_remaining > 0.0:
+  muzzle_flash_remaining = maxf(0.0,muzzle_flash_remaining-delta)
+  var flash_visible := muzzle_flash_remaining > 0.0
+  if is_instance_valid(muzzle_flash): muzzle_flash.visible = flash_visible
+  if is_instance_valid(muzzle_light): muzzle_light.visible = flash_visible
+ if recoil_pitch > 0.0 and is_instance_valid(camera):
+  var recover := minf(recoil_pitch,delta*0.42)
+  camera.rotation.x = clampf(camera.rotation.x+recover,-1.48,1.48)
+  recoil_pitch -= recover
+
+func _build_muzzle_effect() -> void:
+ muzzle_flash = MeshInstance3D.new()
+ muzzle_flash.name = "MuzzleFlash"
+ var flash_mesh := SphereMesh.new()
+ flash_mesh.radius = 0.085
+ flash_mesh.height = 0.16
+ flash_mesh.radial_segments = 6
+ flash_mesh.rings = 3
+ muzzle_flash.mesh = flash_mesh
+ muzzle_flash.position = Vector3(0.30,-0.27,-1.18)
+ var flash_material := StandardMaterial3D.new()
+ flash_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+ flash_material.albedo_color = Color(1.0,0.56,0.16)
+ flash_material.emission_enabled = true
+ flash_material.emission = Color(1.0,0.32,0.055)
+ flash_material.emission_energy_multiplier = 4.0
+ muzzle_flash.material_override = flash_material
+ muzzle_flash.visible = false
+ camera.add_child(muzzle_flash)
+ muzzle_light = OmniLight3D.new()
+ muzzle_light.light_color = Color(1.0,0.46,0.16)
+ muzzle_light.light_energy = 2.8
+ muzzle_light.omni_range = 4.5
+ muzzle_light.position = Vector3(0.30,-0.27,-1.16)
+ muzzle_light.visible = false
+ camera.add_child(muzzle_light)
+
+func _build_shot_audio() -> void:
+ # صوت إطلاق قصير مولّد داخل اللعبة لتجنب الاعتماد على ملف خارجي.
+ var wav := AudioStreamWAV.new()
+ wav.mix_rate = 22050
+ wav.format = AudioStreamWAV.FORMAT_16_BITS
+ wav.stereo = false
+ var pcm := PackedByteArray()
+ var count := 3308
+ for i in range(count):
+  var t := float(i)/float(wav.mix_rate)
+  var envelope := exp(-t*35.0)
+  var low := sin(TAU*95.0*t)*0.45
+  var noise := randf_range(-1.0,1.0)*0.75
+  var sample := clampi(int((low+noise)*envelope*17500.0),-32768,32767)
+  pcm.append(sample & 0xff)
+  pcm.append((sample >> 8) & 0xff)
+ wav.data = pcm
+ shot_audio = AudioStreamPlayer3D.new()
+ shot_audio.stream = wav
+ shot_audio.volume_db = -8.0
+ shot_audio.max_distance = 65.0
+ shot_audio.unit_size = 8.0
+ add_child(shot_audio)
 
 func _build_weapon_model() -> void:
  weapon_model = Node3D.new()
@@ -162,11 +231,23 @@ func fire() -> void:
   return
  fire_timer=RATES[weapon_index]
  ammo[weapon_index]=int(ammo[weapon_index])-1
+ var kick := 0.022 if weapon_index == 0 else (0.014 if weapon_index == 1 else 0.058)
+ camera.rotation.x = clampf(camera.rotation.x-kick,-1.48,1.48)
+ recoil_pitch = minf(0.16,recoil_pitch+kick)
+ muzzle_flash_remaining = 0.055
+ if is_instance_valid(muzzle_flash): muzzle_flash.visible = true
+ if is_instance_valid(muzzle_light): muzzle_light.visible = true
+ if is_instance_valid(shot_audio):
+  shot_audio.pitch_scale = randf_range(0.92,1.06)
+  shot_audio.play()
  ray.force_raycast_update()
  if ray.is_colliding():
   var target=ray.get_collider()
   if is_instance_valid(target) and target.has_method("take_damage"):
    target.take_damage(DAMAGE[weapon_index])
+   var root := get_tree().current_scene
+   if is_instance_valid(root) and root.has_method("show_hitmarker"):
+    root.show_hitmarker()
  _update_hud()
 
 func switch_weapon() -> void:
@@ -184,6 +265,9 @@ func get_weapon_name() -> String:
 
 func get_current_ammo() -> int:
  return int(ammo[weapon_index])
+
+func get_current_reserve_ammo() -> int:
+ return int(reserve_ammo[weapon_index])
 
 func reload_weapon() -> void:
  if reloading or int(ammo[weapon_index])>=MAGAZINES[weapon_index] or int(reserve_ammo[weapon_index])<=0: return
