@@ -128,12 +128,6 @@ func _physics_process(delta: float) -> void:
   velocity.z=(dir.z*advance + side.z*0.72)*speed
   look_at(Vector3(player.global_position.x,global_position.y,player.global_position.z))
   _try_attack(distance)
- else:
-  velocity.x=0
-  velocity.z=0
-  if attack_cooldown<=0:
-   attack_cooldown=0.9
-   if player.has_method("take_damage"): player.take_damage(10)
  if not is_on_floor(): velocity.y-=18.0*delta
  move_and_slide()
 
@@ -142,7 +136,7 @@ func _try_attack(distance: float) -> void:
  attack_cooldown=randf_range(1.1,1.8)
  # لا يصيب العدو اللاعب خلف الجدران: يجب أن يمر خط الرمي مباشرة إلى اللاعب.
  var from_point := global_position + Vector3(0,0.92,0)
- var to_point: Vector3 = player.global_position + Vector3(0,1.05,0)
+ var to_point: Vector3 = player.global_position + Vector3(0,0.7,0)
  var query := PhysicsRayQueryParameters3D.create(from_point,to_point)
  query.exclude = [get_rid()]
  var hit := get_world_3d().direct_space_state.intersect_ray(query)
