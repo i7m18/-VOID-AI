@@ -270,10 +270,34 @@ func _build_world() -> void:
  var plane := PlaneMesh.new()
  plane.size = Vector2(130,130)
  mesh.mesh = plane
- var mat := StandardMaterial3D.new()
- mat.albedo_color = Color(0.22,0.24,0.20)
- mat.roughness = 1.0
- mesh.material_override = mat
+ # خامة رمل وحصى مولّدة داخل اللعبة بدل الأرضية ذات اللون الواحد.
+ var noise_image := Image.create(96,96,false,Image.FORMAT_RGBA8)
+ for py in range(96):
+  for px in range(96):
+   var n := randf_range(0.12,0.88)
+   noise_image.set_pixel(px,py,Color(n,n,n,1.0))
+ var noise_texture := ImageTexture.create_from_image(noise_image)
+ var terrain_shader := Shader.new()
+ terrain_shader.code = """
+shader_type spatial;
+render_mode diffuse_burley, specular_schlick_ggx;
+uniform sampler2D noise_map : repeat_enable, filter_linear_mipmap;
+void fragment() {
+    float broad = texture(noise_map, UV * 9.0).r;
+    float grain = texture(noise_map, UV * 125.0).r;
+    vec3 sand_dark = vec3(0.19, 0.17, 0.13);
+    vec3 sand_light = vec3(0.43, 0.36, 0.25);
+    vec3 sand = mix(sand_dark, sand_light, broad);
+    sand += (grain - 0.5) * 0.055;
+    ALBEDO = sand;
+    ROUGHNESS = 0.98;
+    METALLIC = 0.0;
+}
+"""
+ var terrain_material := ShaderMaterial.new()
+ terrain_material.shader = terrain_shader
+ terrain_material.set_shader_parameter("noise_map",noise_texture)
+ mesh.material_override = terrain_material
  ground.add_child(mesh)
  var coll := CollisionShape3D.new()
  var shape := BoxShape3D.new()
@@ -325,7 +349,8 @@ func _build_world() -> void:
  _add_structure(Vector3(10,2,-40),Vector3(2,4,18),Color(0.16,0.20,0.19))
  var sun := DirectionalLight3D.new()
  sun.rotation_degrees = Vector3(-55,-25,0)
- sun.light_energy = 1.15
+sun.light_energy = 1.25
+ sun.light_color = Color(1.0,0.78,0.58)
  sun.shadow_enabled = true
  world_root.add_child(sun)
 
@@ -424,23 +449,94 @@ func _spawn_player() -> void:
 func _spawn_vehicle() -> void:
  vehicle = Node3D.new()
  vehicle.name = "ArmoredVehicle"
- vehicle.position = Vector3(4,0.8,13)
+ vehicle.position = Vector3(4,0.72,13)
+ # هيكل مدرعة تكتيكية مع واقيات جانبية وزجاج أمامي وعجلات ظاهرة.
  var body := MeshInstance3D.new()
  var box := BoxMesh.new()
- box.size = Vector3(2.4,1.0,4.0)
+ box.size = Vector3(2.25,0.92,3.65)
  body.mesh = box
  var mat := StandardMaterial3D.new()
- mat.albedo_color = Color(0.16,0.24,0.19)
- mat.metallic = 0.35
+ mat.albedo_color = Color(0.14,0.20,0.15)
+ mat.metallic = 0.28
+ mat.roughness = 0.82
  body.material_override = mat
+ body.position.y = 0.15
  vehicle.add_child(body)
  var cabin := MeshInstance3D.new()
  var cab := BoxMesh.new()
- cab.size = Vector3(1.7,0.75,1.6)
+ cab.size = Vector3(1.72,0.78,1.56)
  cabin.mesh = cab
- cabin.position = Vector3(0,0.75,-0.3)
- cabin.material_override = mat
+ cabin.position = Vector3(0,0.91,-0.18)
+ var glass_mat := StandardMaterial3D.new()
+ glass_mat.albedo_color = Color(0.07,0.12,0.14)
+ glass_mat.metallic = 0.42
+ glass_mat.roughness = 0.24
+ cabin.material_override = glass_mat
  vehicle.add_child(cabin)
+ var bumper := MeshInstance3D.new()
+ var bumper_mesh := BoxMesh.new()
+ bumper_mesh.size = Vector3(2.48,0.22,0.23)
+ bumper.mesh = bumper_mesh
+ bumper.position = Vector3(0,-0.10,-1.92)
+ var steel := StandardMaterial3D.new()
+ steel.albedo_color = Color(0.10,0.12,0.11)
+ steel.metallic = 0.72
+ steel.roughness = 0.48
+ bumper.material_override = steel
+ vehicle.add_child(bumper)
+ var grille := MeshInstance3D.new()
+ var grille_mesh := BoxMesh.new()
+ grille_mesh.size = Vector3(0.56,0.38,0.035)
+ grille.mesh = grille_mesh
+ grille.position = Vector3(0,0.15,-1.86)
+ grille.material_override = steel
+ vehicle.add_child(grille)
+ for side in [-1.0,1.0]:
+  var wheel := MeshInstance3D.new()
+  var wheel_mesh := CylinderMesh.new()
+  wheel_mesh.top_radius = 0.42
+  wheel_mesh.bottom_radius = 0.42
+  wheel_mesh.height = 0.34
+  wheel_mesh.radial_segments = 12
+  wheel.mesh = wheel_mesh
+  wheel.position = Vector3(side*1.12,-0.20,-1.15)
+  wheel.rotation.z = deg_to_rad(90)
+  var tire_mat := StandardMaterial3D.new()
+  tire_mat.albedo_color = Color(0.035,0.04,0.035)
+  tire_mat.roughness = 0.99
+  wheel.material_override = tire_mat
+  vehicle.add_child(wheel)
+  var rear_wheel := wheel.duplicate() as MeshInstance3D
+  rear_wheel.position.z = 1.15
+  vehicle.add_child(rear_wheel)
+  var headlight := MeshInstance3D.new()
+  var headlight_mesh := BoxMesh.new()
+  headlight_mesh.size = Vector3(0.30,0.16,0.055)
+  headlight.mesh = headlight_mesh
+  headlight.position = Vector3(side*0.78,0.26,-1.86)
+  var headlight_mat := StandardMaterial3D.new()
+  headlight_mat.albedo_color = Color(0.83,0.72,0.46)
+  headlight_mat.emission_enabled = true
+  headlight_mat.emission = Color(0.54,0.36,0.12)
+  headlight_mat.emission_energy_multiplier = 0.7
+  headlight.material_override = headlight_mat
+  vehicle.add_child(headlight)
+ var roof_mount := MeshInstance3D.new()
+ var mount_mesh := BoxMesh.new()
+ mount_mesh.size = Vector3(0.65,0.13,0.72)
+ roof_mount.mesh = mount_mesh
+ roof_mount.position = Vector3(0,1.34,-0.1)
+ roof_mount.material_override = steel
+ vehicle.add_child(roof_mount)
+ var antenna := MeshInstance3D.new()
+ var antenna_mesh := CylinderMesh.new()
+ antenna_mesh.top_radius = 0.018
+ antenna_mesh.bottom_radius = 0.018
+ antenna_mesh.height = 1.1
+ antenna.mesh = antenna_mesh
+ antenna.position = Vector3(0.64,1.65,0.35)
+ antenna.material_override = steel
+ vehicle.add_child(antenna)
  world_root.add_child(vehicle)
 
 func _objective_position() -> Vector3:
