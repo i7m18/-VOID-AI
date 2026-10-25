@@ -724,9 +724,31 @@ func _build_touch_controls() -> void:
  switch.custom_minimum_size = Vector2(160,45)
  controls.add_child(switch)
  var interact := _make_button("تفاعل",Callable(self,"interact_objective"),45)
- interact.position = Vector2(w-335,h-155)
- interact.custom_minimum_size = Vector2(160,45)
+ interact.position = Vector2(w-335,h-105)
+ interact.custom_minimum_size = Vector2(150,45)
  controls.add_child(interact)
+ var aim := _make_button("تصويب",Callable(self,"_dummy"),44)
+ aim.position = Vector2(w-160,h-218)
+ aim.custom_minimum_size = Vector2(140,44)
+ controls.add_child(aim)
+ aim.button_down.connect(func(): if is_instance_valid(player): player.set_aiming(true))
+ aim.button_up.connect(func(): if is_instance_valid(player): player.set_aiming(false))
+ var grenade := _make_button("قنبلة",Callable(self,"_dummy"),44)
+ grenade.position = Vector2(w-500,h-105)
+ grenade.custom_minimum_size = Vector2(140,44)
+ controls.add_child(grenade)
+ grenade.pressed.connect(func(): if is_instance_valid(player): player.throw_grenade())
+ var sprint := _make_button("ركض",Callable(self,"_dummy"),44)
+ sprint.position = Vector2(w-500,h-155)
+ sprint.custom_minimum_size = Vector2(140,44)
+ controls.add_child(sprint)
+ sprint.button_down.connect(func(): if is_instance_valid(player): player.set_sprinting(true))
+ sprint.button_up.connect(func(): if is_instance_valid(player): player.set_sprinting(false))
+ var crouch := _make_button("انحناء",Callable(self,"_dummy"),44)
+ crouch.position = Vector2(w-500,h-205)
+ crouch.custom_minimum_size = Vector2(140,44)
+ controls.add_child(crouch)
+ crouch.pressed.connect(func(): if is_instance_valid(player): player.toggle_crouch())
  var car := _make_button("ركوب / نزول",Callable(player,"toggle_vehicle"),45)
  car.position = Vector2(w-335,h-55)
  car.custom_minimum_size = Vector2(160,45)
@@ -845,6 +867,105 @@ func player_hit() -> void:
   col.add_child(_make_button("إعادة المحاولة",Callable(self,"_restart_mission")))
   col.add_child(_make_button("القائمة الرئيسية",Callable(self,"_show_main_menu")))
 
+func show_message(value: String) -> void:
+ if is_instance_valid(message_label):
+  message_label.text = value
+
+func throw_grenade(origin: Vector3, direction: Vector3, owner_player: Node3D) -> void:
+ if not game_active: return
+ var grenade := RigidBody3D.new()
+ grenade.name = "Grenade"
+ grenade.mass = 0.72
+ grenade.gravity_scale = 1.0
+ grenade.linear_damp = 0.22
+ grenade.angular_damp = 0.8
+ var shell := MeshInstance3D.new()
+ var shell_mesh := SphereMesh.new()
+ shell_mesh.radius = 0.13
+ shell_mesh.height = 0.26
+ shell_mesh.radial_segments = 10
+ shell_mesh.rings = 6
+ shell.mesh = shell_mesh
+ var shell_material := StandardMaterial3D.new()
+ shell_material.albedo_color = Color(0.12,0.19,0.12)
+ shell_material.metallic = 0.35
+ shell_material.roughness = 0.72
+ shell.material_override = shell_material
+ grenade.add_child(shell)
+ var collision := CollisionShape3D.new()
+ var sphere := SphereShape3D.new()
+ sphere.radius = 0.13
+ collision.shape = sphere
+ grenade.add_child(collision)
+ world_root.add_child(grenade)
+ grenade.global_position = origin + direction.normalized()*0.55
+ grenade.linear_velocity = direction.normalized()*12.5 + Vector3.UP*4.1
+ grenade.angular_velocity = Vector3(5.0,2.0,3.0)
+ var fuse := Timer.new()
+ fuse.one_shot = true
+ fuse.wait_time = 2.1
+ grenade.add_child(fuse)
+ fuse.timeout.connect(_detonate_grenade.bind(grenade,owner_player))
+ fuse.start()
+ show_message("قنبلة يدوية! ابتعد عن منطقة الانفجار")
+
+func _detonate_grenade(grenade: RigidBody3D, owner_player: Node3D) -> void:
+ if not is_instance_valid(grenade): return
+ var center := grenade.global_position
+ var blast := MeshInstance3D.new()
+ var blast_mesh := SphereMesh.new()
+ blast_mesh.radius = 0.5
+ blast_mesh.height = 1.0
+ blast_mesh.radial_segments = 12
+ blast_mesh.rings = 8
+ blast.mesh = blast_mesh
+ var blast_material := StandardMaterial3D.new()
+ blast_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+ blast_material.albedo_color = Color(1.0,0.38,0.09,0.9)
+ blast_material.emission_enabled = true
+ blast_material.emission = Color(1.0,0.18,0.025)
+ blast_material.emission_energy_multiplier = 3.2
+ blast_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+ blast.material_override = blast_material
+ blast.position = center
+ world_root.add_child(blast)
+ var light := OmniLight3D.new()
+ light.position = center
+ light.light_color = Color(1.0,0.36,0.10)
+ light.light_energy = 4.5
+ light.omni_range = 10.0
+ world_root.add_child(light)
+ var tween := create_tween()
+ tween.tween_property(blast,"scale",Vector3.ONE*8.0,0.22)
+ tween.parallel().tween_property(blast_material,"albedo_color",Color(1.0,0.10,0.02,0.0),0.22)
+ tween.parallel().tween_property(light,"light_energy",0.0,0.25)
+ tween.tween_callback(Callable(blast,"queue_free"))
+ tween.tween_callback(Callable(light,"queue_free"))
+ grenade.queue_free()
+
+ var explosion_shape := SphereShape3D.new()
+ explosion_shape.radius = 5.2
+ var query := PhysicsShapeQueryParameters3D.new()
+ query.shape = explosion_shape
+ query.transform = Transform3D(Basis.IDENTITY,center)
+ query.collide_with_bodies = true
+ query.collide_with_areas = true
+ if is_instance_valid(owner_player):
+  query.exclude = [owner_player.get_rid()]
+ var hits := get_world_3d().direct_space_state.intersect_shape(query,64)
+ var damaged: Dictionary = {}
+ for hit in hits:
+  var target: Object = hit.get("collider")
+  if not is_instance_valid(target) or not target.has_method("take_damage"): continue
+  var object_id := target.get_instance_id()
+  if damaged.has(object_id): continue
+  damaged[object_id] = true
+  if target is Node3D:
+   var distance: float = (target as Node3D).global_position.distance_to(center)
+   var damage := 115 if distance < 1.7 else (78 if distance < 3.2 else 38)
+   target.take_damage(damage)
+ message_label.text = "انفجار! أُطلقت القنبلة على المنطقة"
+
 func show_hitmarker() -> void:
  if not is_instance_valid(reticle_label): return
  reticle_label.text = "×"
@@ -861,4 +982,4 @@ func _update_hud() -> void:
   objective_label.text = "الهدف: "+str(mission["objective"])+" • أمّن المنطقة"
  else:
   objective_label.text = "الهدف: اقترب من العلامة واضغط «تفاعل»"
- status_label.text = "الصحة %d  |  الذخيرة %d/%d  |  الأعداء %d  |  %s" % [player.health,player.get_current_ammo(),player.get_current_reserve_ammo(),enemies_left,player.get_weapon_name()]
+ status_label.text = "الصحة %d  |  الذخيرة %d/%d  |  القنابل %d  |  الأعداء %d  |  %s" % [player.health,player.get_current_ammo(),player.get_current_reserve_ammo(),player.grenades,enemies_left,player.get_weapon_name()]
