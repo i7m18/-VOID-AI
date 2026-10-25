@@ -77,6 +77,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                 onAskAI = { question, callback -> askGemini(question, callback) },
                 onRunAgent = { goal, callback -> runAgentTask(goal, callback) },
                 onGenerateVideo = { prompt, callback -> generateVideo(prompt, callback) },
+                onGenerateImage = { prompt, callback -> generateImage(prompt, callback) },
                 onSaveApiKey = { key -> getSharedPreferences("void_ai", MODE_PRIVATE).edit().putString("gemini_api_key", key.trim()).apply() },
                 hasApiKey = { !getSharedPreferences("void_ai", MODE_PRIVATE).getString("gemini_api_key", "").isNullOrBlank() },
                 onListen = { callback -> startListening(callback) },
@@ -298,6 +299,123 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             }
             runOnUiThread { callback(result) }
         }.start()
+    }
+
+    /** Generate a still design and save it to Pictures/VOID AI using Gemini image generation. */
+    private fun generateImage(userPrompt: String, callback: (String) -> Unit) {
+        val key = getSharedPreferences("void_ai", MODE_PRIVATE).getString("gemini_api_key", "").orEmpty()
+        if (key.isBlank()) {
+            callback("اربط مفتاح Gemini أولاً من «ربط AI». توليد الصور يحتاج اتصالاً بالإنترنت وقد يعتمد على الحصة المتاحة.")
+            return
+        }
+        Thread {
+            var connection: HttpURLConnection? = null
+            val result = try {
+                connection = URL("https://generativelanguage.googleapis.com/v1beta/interactions").openConnection() as HttpURLConnection
+                connection.requestMethod = "POST"
+                connection.connectTimeout = 30000
+                connection.readTimeout = 180000
+                connection.doOutput = true
+                connection.setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                connection.setRequestProperty("x-goog-api-key", key)
+                val prompt = """
+                    Create a polished original visual design from the user's request below.
+                    Pay attention to composition, color harmony, lighting, clean edges, and professional
+                    presentation. Use the exact requested wording only when the user supplies wording;
+                    otherwise avoid fake text, logos, or watermarks.
+                    User request: ${userPrompt.trim()}
+                """.trimIndent()
+                val body = JSONObject()
+                    .put("model", "gemini-nano-banana-2.1")
+                    .put("input", prompt)
+                    .put("response_format", JSONObject()
+                        .put("type", "image")
+                        .put("mime_type", "image/jpeg")
+                        .put("aspect_ratio", "1:1")
+                        .put("image_size", "1K"))
+                connection.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
+                val code = connection.responseCode
+                val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+                val raw = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
+                if (code !in 200..299) {
+                    val detail = try { JSONObject(raw).optJSONObject("error")?.optString("message").orEmpty() }
+                    catch (_: Exception) { "" }
+                    val reason = detail.ifBlank { raw.take(500) }
+                    when (code) {
+                        400 -> "Gemini رفض طلب التصميم (400): $reason"
+                        401 -> "مفتاح Gemini غير صالح (401)."
+                        403 -> "حسابك أو المفتاح لا يملك صلاحية نموذج الصور (403): $reason"
+                        404 -> "نموذج الصور غير متاح لهذا الحساب أو المشروع (404): $reason"
+                        429 -> "وصلت إلى حد الطلبات أو الحصة (429): $reason"
+                        else -> "تعذر إنشاء التصميم (HTTP $code): $reason"
+                    }
+                } else {
+                    val root = JSONObject(raw)
+                    var imageData = ""
+                    var mime = "image/jpeg"
+                    val steps = root.optJSONArray("steps")
+                    if (steps != null) {
+                        for (i in 0 until steps.length()) {
+                            val step = steps.optJSONObject(i) ?: continue
+                            if (step.optString("type") != "model_output") continue
+                            val blocks = step.optJSONArray("content") ?: continue
+                            for (j in 0 until blocks.length()) {
+                                val block = blocks.optJSONObject(j) ?: continue
+                                if (block.optString("type") == "image") {
+                                    imageData = block.optString("data", "")
+                                    mime = block.optString("mime_type", mime)
+                                    if (imageData.isNotBlank()) break
+                                }
+                            }
+                            if (imageData.isNotBlank()) break
+                        }
+                    }
+                    if (imageData.isBlank()) {
+                        "رجع Gemini من دون صورة قابلة للحفظ. راجع توفر نموذج الصور وصلاحية حسابك."
+                    } else {
+                        val bytes = android.util.Base64.decode(imageData, android.util.Base64.DEFAULT)
+                        if (bytes.isEmpty()) throw IllegalStateException("ملف الصورة الناتج فارغ.")
+                        val saved = saveGeneratedImage(bytes, mime)
+                        "تم إنشاء التصميم وحفظه في Pictures/VOID AI داخل المعرض. اسم الملف: " +
+                            (saved.lastPathSegment ?: "VOID_AI_${System.currentTimeMillis()}.jpg") +
+                            ". إذا لم يظهر فوراً، افتح المعرض أو تطبيق الملفات."
+                    }
+                }
+            } catch (e: Exception) {
+                "ما اكتمل إنشاء الصورة: " + (e.message ?: "خطأ غير معروف") + ". تأكد من الإنترنت وتوفر النموذج والحصة."
+            } finally {
+                connection?.disconnect()
+            }
+            runOnUiThread { callback(result) }
+        }.start()
+    }
+
+    private fun saveGeneratedImage(bytes: ByteArray, mimeType: String): Uri {
+        val png = mimeType.contains("png", ignoreCase = true)
+        val fileName = "VOID_AI_${System.currentTimeMillis()}." + if (png) "png" else "jpg"
+        val values = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+            put(MediaStore.MediaColumns.MIME_TYPE, if (png) "image/png" else "image/jpeg")
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/VOID AI")
+                put(MediaStore.MediaColumns.IS_PENDING, 1)
+            }
+        }
+        val uri = contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+            ?: throw IllegalStateException("أندرويد لم يسمح بإنشاء ملف في مجلد الصور.")
+        try {
+            val output = contentResolver.openOutputStream(uri, "w")
+                ?: throw IllegalStateException("تعذر فتح ملف الصورة للكتابة.")
+            output.use { it.write(bytes) }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val ready = ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }
+                contentResolver.update(uri, ready, null, null)
+            }
+            return uri
+        } catch (e: Exception) {
+            contentResolver.delete(uri, null, null)
+            throw e
+        }
     }
 
     private fun saveGeneratedVideo(bytes: ByteArray): Uri {
@@ -537,6 +655,7 @@ private fun VoidAiApp(
     onAskAI: (String, (String) -> Unit) -> Unit,
     onRunAgent: (String, (String) -> Unit) -> Unit,
     onGenerateVideo: (String, (String) -> Unit) -> Unit,
+    onGenerateImage: (String, (String) -> Unit) -> Unit,
     onSaveApiKey: (String) -> Unit,
     hasApiKey: () -> Boolean,
     onListen: ((String) -> Unit) -> Unit,
@@ -565,6 +684,7 @@ private fun VoidAiApp(
         val normalized = text.lowercase(Locale.ROOT)
         val wantsEdit = listOf("مونتاج", "منتاج", "عدّل فيديو", "عدل فيديو", "عدّل الفيديو", "عدل الفيديو", "ركب فيديو", "قص الفيديو", "أضف انتقالات", "اضف انتقالات", "على الفيديو الموجود", "هذا الفيديو").any { normalized.contains(it) }
         val wantsNewVideo = !wantsEdit && listOf("سوي فيديو", "سوّي فيديو", "سويلي فيديو", "صمم فيديو", "صمّم فيديو", "صمملي فيديو", "صمّملي فيديو", "اصنع فيديو", "أنشئ فيديو", "انشئ فيديو", "ولد فيديو", "ولّد فيديو", "اعمل فيديو", "generate video", "make a video").any { normalized.contains(it) }
+        val wantsNewImage = listOf("صمم صورة", "صمّم صورة", "صمملي صورة", "صمّملي صورة", "أنشئ صورة", "انشئ صورة", "ولد صورة", "ولّد صورة", "صمم شعار", "صمملي شعار", "صمم لوجو", "صمملي لوجو", "صمم بوستر", "صمملي بوستر", "create an image", "generate an image", "design a logo").any { normalized.contains(it) }
         val isCapCutTask = normalized.contains("capcut") && listOf("صمم", "صمّم", "سوي", "سوّي", "عدل", "عدّل", "مونتاج", "منتاج", "مشروع").any { normalized.contains(it) }
         val isDesignTask = wantsEdit || isCapCutTask
         if (wantsNewVideo) {
@@ -574,6 +694,17 @@ private fun VoidAiApp(
                 messages = messages + ChatLine(output, false)
                 thinking = false
                 testStatus = if (output.startsWith("تم إنشاء الفيديو")) "الفيديو محفوظ بالمعرض" else "تعذر إنشاء الفيديو"
+                onSpeak(output)
+            }
+            return
+        }
+        if (wantsNewImage) {
+            thinking = true
+            testStatus = "أحوّل فكرتك إلى تصميم فعلي..."
+            onGenerateImage(text) { output ->
+                messages = messages + ChatLine(output, false)
+                thinking = false
+                testStatus = if (output.startsWith("تم إنشاء التصميم")) "التصميم محفوظ بالمعرض" else "تعذر إنشاء التصميم"
                 onSpeak(output)
             }
             return
