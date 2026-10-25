@@ -23,6 +23,7 @@ var mission_index := 0
 var game_active := false
 var mission_won := false
 var hud_layer: CanvasLayer
+var arabic_font: Font
 var title_label: Label
 var status_label: Label
 var objective_label: Label
@@ -35,6 +36,10 @@ var fire_held := false
 
 func _ready() -> void:
  randomize()
+ if OS.has_feature("android"):
+  DisplayServer.screen_set_orientation(DisplayServer.SCREEN_LANDSCAPE)
+ arabic_font = load("res://fonts/NotoSansArabic.ttf") as Font
+ Engine.max_fps = 60
  world_root = Node3D.new()
  world_root.name = "GeneratedWorld"
  add_child(world_root)
@@ -73,6 +78,7 @@ func _label(value: String, size: int=20, color: Color=Color(0.92,0.95,0.93)) -> 
  l.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
  l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
  l.layout_direction = Control.LAYOUT_DIRECTION_RTL
+ if arabic_font != null: l.add_theme_font_override("font", arabic_font)
  return l
 
 func _make_button(value: String, callback: Callable, height: int=54) -> Button:
@@ -80,6 +86,8 @@ func _make_button(value: String, callback: Callable, height: int=54) -> Button:
  b.text = value
  b.custom_minimum_size = Vector2(190,height)
  b.add_theme_font_size_override("font_size",19)
+ b.layout_direction = Control.LAYOUT_DIRECTION_RTL
+ if arabic_font != null: b.add_theme_font_override("font", arabic_font)
  var normal := StyleBoxFlat.new()
  normal.bg_color = Color(0.08,0.18,0.17,0.98)
  normal.border_color = Color(0.25,0.62,0.52)
@@ -229,14 +237,25 @@ func _begin_mission() -> void:
 func _build_world() -> void:
  var world_environment := WorldEnvironment.new()
  var environment := Environment.new()
- environment.background_mode = Environment.BG_COLOR
- environment.background_color = Color(0.42,0.50,0.53)
- environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
- environment.ambient_light_color = Color(0.62,0.57,0.46)
- environment.ambient_light_energy = 0.62
+ var sky_material := ProceduralSkyMaterial.new()
+ sky_material.sky_top_color = Color(0.035,0.075,0.12)
+ sky_material.sky_horizon_color = Color(0.66,0.47,0.30)
+ sky_material.sky_curve = 0.18
+ sky_material.ground_bottom_color = Color(0.045,0.052,0.045)
+ sky_material.ground_horizon_color = Color(0.35,0.28,0.20)
+ sky_material.ground_curve = 0.22
+ sky_material.sun_angle_max = 18.0
+ sky_material.sun_curve = 0.12
+ var sky := Sky.new()
+ sky.sky_material = sky_material
+ environment.background_mode = Environment.BG_SKY
+ environment.sky = sky
+ environment.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
+ environment.ambient_light_energy = 0.72
+ environment.tonemap_mode = Environment.TONE_MAPPER_FILMIC
  environment.fog_enabled = true
- environment.fog_light_color = Color(0.64,0.57,0.44)
- environment.fog_density = 0.0025
+ environment.fog_light_color = Color(0.43,0.34,0.25)
+ environment.fog_density = 0.0011
  world_environment.environment = environment
  world_root.add_child(world_environment)
  var ground := StaticBody3D.new()
@@ -256,30 +275,44 @@ func _build_world() -> void:
  coll.position.y = -0.1
  ground.add_child(coll)
  world_root.add_child(ground)
- for i in range(42):
-  var block := StaticBody3D.new()
-  var size := Vector3(randf_range(2.5,6.5),randf_range(1.5,5.0),randf_range(2.5,6.5))
-  var bm := MeshInstance3D.new()
-  var box := BoxMesh.new()
-  box.size = size
-  bm.mesh = box
-  var material := StandardMaterial3D.new()
-  material.albedo_color = [Color(0.28,0.29,0.25),Color(0.35,0.31,0.24),Color(0.18,0.23,0.21),Color(0.31,0.32,0.30)][i%4]
-  material.roughness = 0.95
-  bm.material_override = material
-  block.add_child(bm)
-  var cs := CollisionShape3D.new()
-  var bs := BoxShape3D.new()
-  bs.size = size
-  cs.shape = bs
-  block.add_child(cs)
-  var x := randf_range(-52,52)
-  var z := randf_range(-52,52)
-  if absf(x)<12 and z>0 and z<20: x += 18
-  var target_position := _objective_position()
-  if absf(x-target_position.x)<5.5 and absf(z-target_position.z)<6.0: x += 15.0
-  block.position = Vector3(x,size.y/2,z)
-  world_root.add_child(block)
+ # طريق عسكري متضرر يقود اللاعب إلى منطقة الاشتباك.
+ _add_structure(Vector3(0,0.015,0),Vector3(6.4,0.05,116),Color(0.15,0.16,0.15))
+ for z_mark in range(-52,54,9):
+  _add_structure(Vector3(0,0.055,float(z_mark)),Vector3(0.12,0.018,3.0),Color(0.72,0.58,0.31))
+ # مبانٍ متعددة بواجهات ونوافذ، مع إبقاء الممرات مفتوحة للقتال.
+ var building_sites := [
+  [Vector3(-19,0,-34),Vector3(9,7,10),Color(0.29,0.27,0.22)],
+  [Vector3(20,0,-41),Vector3(11,9,9),Color(0.25,0.27,0.26)],
+  [Vector3(-25,0,-8),Vector3(8,5,12),Color(0.34,0.29,0.23)],
+  [Vector3(26,0,-12),Vector3(10,7,8),Color(0.28,0.29,0.27)],
+  [Vector3(-27,0,23),Vector3(12,8,10),Color(0.24,0.27,0.25)],
+  [Vector3(23,0,24),Vector3(10,6,12),Color(0.34,0.30,0.24)],
+  [Vector3(-43,0,-27),Vector3(10,11,11),Color(0.26,0.27,0.26)],
+  [Vector3(43,0,-33),Vector3(12,9,10),Color(0.27,0.29,0.28)]
+ ]
+ for site in building_sites:
+  _add_building(site[0],site[1],site[2])
+ # حواجز خرسانية وأكياس رمل وصناديق ذخيرة لتوفير غطاء تكتيكي.
+ for i in range(10):
+  var bx := -8.5 + float(i)*1.8
+  _add_structure(Vector3(bx,0.48,7.5),Vector3(1.45,0.95,0.72),Color(0.32,0.30,0.24))
+  if i % 2 == 0:
+   _add_crate(Vector3(bx,1.1,7.2),Color(0.19,0.24,0.18))
+ for i in range(28):
+  var rock := MeshInstance3D.new()
+  var rock_mesh := SphereMesh.new()
+  rock_mesh.radial_segments = 6
+  rock_mesh.rings = 3
+  rock_mesh.radius = randf_range(0.18,0.75)
+  rock_mesh.height = randf_range(0.18,0.52)
+  rock.mesh = rock_mesh
+  var rock_mat := StandardMaterial3D.new()
+  rock_mat.albedo_color = [Color(0.25,0.22,0.18),Color(0.34,0.29,0.22),Color(0.19,0.21,0.19)][i%3]
+  rock_mat.roughness = 1.0
+  rock.material_override = rock_mat
+  rock.position = Vector3(randf_range(-56,56),rock_mesh.height*0.32,randf_range(-56,56))
+  rock.scale = Vector3(randf_range(0.7,1.6),1.0,randf_range(0.7,1.4))
+  world_root.add_child(rock)
  _add_structure(Vector3(0,2,-48),Vector3(18,4,2),Color(0.16,0.20,0.19))
  _add_structure(Vector3(-10,2,-40),Vector3(2,4,18),Color(0.16,0.20,0.19))
  _add_structure(Vector3(10,2,-40),Vector3(2,4,18),Color(0.16,0.20,0.19))
@@ -288,6 +321,72 @@ func _build_world() -> void:
  sun.light_energy = 1.15
  sun.shadow_enabled = true
  world_root.add_child(sun)
+
+func _add_building(pos: Vector3, size: Vector3, color: Color) -> void:
+ var body := StaticBody3D.new()
+ body.position = pos + Vector3(0,size.y * 0.5,0)
+ var shell := MeshInstance3D.new()
+ var shell_mesh := BoxMesh.new()
+ shell_mesh.size = size
+ shell.mesh = shell_mesh
+ var shell_mat := StandardMaterial3D.new()
+ shell_mat.albedo_color = color
+ shell_mat.roughness = 0.98
+ shell.material_override = shell_mat
+ body.add_child(shell)
+ var collision := CollisionShape3D.new()
+ var collision_mesh := BoxShape3D.new()
+ collision_mesh.size = size
+ collision.shape = collision_mesh
+ body.add_child(collision)
+ # نوافذ سوداء وأطر خرسانية تضيف تفاصيل للواجهات.
+ var floors := maxi(2, int(size.y / 2.2))
+ var columns := maxi(2, int(size.x / 2.7))
+ for floor_index in range(floors):
+  for column_index in range(columns):
+   var window_node := MeshInstance3D.new()
+   var window_mesh := BoxMesh.new()
+   window_mesh.size = Vector3(0.72,0.62,0.07)
+   window_node.mesh = window_mesh
+   var window_mat := StandardMaterial3D.new()
+   window_mat.albedo_color = Color(0.055,0.075,0.08) if (floor_index+column_index)%3 != 0 else Color(0.16,0.12,0.085)
+   window_mat.metallic = 0.1
+   window_mat.roughness = 0.42
+   window_node.material_override = window_mat
+   window_node.position = Vector3(-size.x*0.5 + (float(column_index)+0.7)*size.x/float(columns),
+    -size.y*0.5 + 1.15 + float(floor_index)*size.y/float(floors),
+    -size.z*0.5 - 0.04)
+   body.add_child(window_node)
+ var roof_lip := MeshInstance3D.new()
+ var lip_mesh := BoxMesh.new()
+ lip_mesh.size = Vector3(size.x+0.35,0.18,size.z+0.35)
+ roof_lip.mesh = lip_mesh
+ roof_lip.position.y = size.y*0.5
+ var lip_mat := StandardMaterial3D.new()
+ lip_mat.albedo_color = color.darkened(0.22)
+ roof_lip.material_override = lip_mat
+ body.add_child(roof_lip)
+ world_root.add_child(body)
+
+func _add_crate(pos: Vector3, color: Color) -> void:
+ var crate := MeshInstance3D.new()
+ var crate_mesh := BoxMesh.new()
+ crate_mesh.size = Vector3(0.72,0.68,0.72)
+ crate.mesh = crate_mesh
+ var mat := StandardMaterial3D.new()
+ mat.albedo_color = color
+ mat.roughness = 0.9
+ crate.material_override = mat
+ crate.position = pos
+ world_root.add_child(crate)
+ for x_side in [-0.27,0.27]:
+  var brace := MeshInstance3D.new()
+  var brace_mesh := BoxMesh.new()
+  brace_mesh.size = Vector3(0.05,0.7,0.76)
+  brace.mesh = brace_mesh
+  brace.material_override = mat
+  brace.position = pos + Vector3(x_side,0,0)
+  world_root.add_child(brace)
 
 func _add_structure(pos: Vector3,size: Vector3,color: Color) -> void:
  var body := StaticBody3D.new()
@@ -397,6 +496,7 @@ func _spawn_objective() -> void:
  label_pivot.position.y = 2.6
  var text_mesh := TextMesh.new()
  text_mesh.text = "الهدف"
+ if arabic_font != null: text_mesh.font = arabic_font
  text_mesh.font_size = 48
  text_mesh.depth = 0.01
  var text_node := MeshInstance3D.new()
