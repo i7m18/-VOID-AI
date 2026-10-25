@@ -1,0 +1,95 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - game/fps-military-prototype
+    paths:
+      - "fps-game/**"
+      - ".github/workflows/build-fps-android.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  export-android:
+    name: Export Godot Android Debug APK
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android platform and build tools
+        run: |
+          yes | sdkmanager --licenses
+          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+
+      - name: Install Godot 4.3
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.3.0
+          use-dotnet: false
+
+      - name: Install matching export templates
+        shell: bash
+        run: |
+          mkdir -p "$HOME/.local/share/godot/export_templates/4.3.stable"
+          curl -L --fail --retry 3 \
+            https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_export_templates.tpz \
+            -o /tmp/godot-templates.tpz
+          mkdir -p /tmp/godot-templates
+          unzip -q /tmp/godot-templates.tpz -d /tmp/godot-templates
+          cp -a /tmp/godot-templates/templates/. "$HOME/.local/share/godot/export_templates/4.3.stable/"
+
+      - name: Configure Android debug signing and Godot SDK paths
+        shell: bash
+        run: |
+          mkdir -p "$HOME/.android" "$HOME/.config/godot"
+          keytool -genkeypair -v \
+            -keystore "$HOME/.android/debug.keystore" \
+            -storepass android -alias androiddebugkey -keypass android \
+            -dname "CN=Android Debug,O=Android,C=US" \
+            -keyalg RSA -keysize 2048 -validity 10000
+          cat > "$HOME/.config/godot/editor_settings-4.tres" <<EOF
+          [gd_resource type="EditorSettings" format=3]
+          [resource]
+          export/android/java_sdk_path = "$JAVA_HOME"
+          export/android/android_sdk_path = "$ANDROID_SDK_ROOT"
+          export/android/debug_keystore = "$HOME/.android/debug.keystore"
+          export/android/debug_keystore_user = "androiddebugkey"
+          export/android/debug_keystore_pass = "android"
+          EOF
+
+      - name: Import and validate project
+        run: |
+          godot --headless --editor --path fps-game --import
+          godot --headless --path fps-game --quit-after 3
+
+      - name: Export Android APK
+        run: |
+          mkdir -p fps-game/build
+          godot --headless --path fps-game --export-debug "Android" fps-game/build/VOID-FRONTLINE-debug.apk
+
+      - name: Verify APK
+        run: |
+          test -s fps-game/build/VOID-FRONTLINE-debug.apk
+          file fps-game/build/VOID-FRONTLINE-debug.apk
+          unzip -t fps-game/build/VOID-FRONTLINE-debug.apk | tail -n 2
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: VOID-FRONTLINE-debug-APK
+          path: fps-game/build/VOID-FRONTLINE-debug.apk
+          if-no-files-found: error
+          retention-days: 30
