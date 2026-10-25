@@ -233,7 +233,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                     User idea: ${userPrompt.trim()}
                 """.trimIndent()
                 val body = JSONObject()
-                    .put("model", "gemini-omni-flash-preview")
+                    .put("model", "gemini-omni-1.1-flash")
                     .put("input", prompt)
                     .put("store", false)
                     .put("response_format", JSONObject()
