@@ -35,6 +35,8 @@ func _ready() -> void:
  _show_main_menu()
 
 func _process(_delta: float) -> void:
+ for child in hud_layer.get_children():
+  if child.name == "TouchControls": child.visible = game_active
  if game_active and fire_held and is_instance_valid(player):
   player.fire()
 
@@ -270,6 +272,7 @@ func _spawn_enemies() -> void:
 func _build_touch_controls() -> void:
  var controls := Control.new()
  controls.name = "TouchControls"
+ controls.mouse_filter = Control.MOUSE_FILTER_IGNORE
  controls.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
  hud_layer.add_child(controls)
  var h := get_viewport().get_visible_rect().size.y
