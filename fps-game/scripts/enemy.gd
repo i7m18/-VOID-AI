@@ -11,38 +11,44 @@ var strafe_sign := 1.0
 var preferred_distance := 14.0
 
 func _ready() -> void:
+ add_to_group("hostile")
  var has_character_model := _build_character_model()
+ var vest_mat := StandardMaterial3D.new()
+ vest_mat.albedo_color = Color(0.10,0.14,0.12)
+ vest_mat.roughness = 0.9
+
  if not has_character_model:
-  var body_mesh:=MeshInstance3D.new()
-  var body_shape:=CapsuleMesh.new()
-  body_shape.radius=0.42
-  body_shape.height=1.65
-  body_mesh.mesh=body_shape
-  var body_material:=StandardMaterial3D.new()
-  body_material.albedo_color=Color(0.18,0.25,0.20)
-  body_material.roughness=0.9
-  body_mesh.material_override=body_material
+  var body_mesh := MeshInstance3D.new()
+  var body_shape := CapsuleMesh.new()
+  body_shape.radius = 0.42
+  body_shape.height = 1.65
+  body_mesh.mesh = body_shape
+  var body_material := StandardMaterial3D.new()
+  body_material.albedo_color = Color(0.18,0.25,0.20)
+  body_material.roughness = 0.9
+  body_mesh.material_override = body_material
   add_child(body_mesh)
+
+ var vest := MeshInstance3D.new()
+ var vest_shape := BoxMesh.new()
+ vest_shape.size = Vector3(0.72,0.55,0.40)
+ vest.mesh = vest_shape
+ vest.material_override = vest_mat
+ vest.position.y = 0.06
+ add_child(vest)
+
  if not has_character_model:
-  var vest_shape:=BoxMesh.new()
-  vest_shape.size=Vector3(0.72,0.55,0.4)
-  vest.mesh=vest_shape
-  var vest_mat:=StandardMaterial3D.new()
-  vest_mat.albedo_color=Color(0.10,0.13,0.12)
-  vest.material_override=vest_mat
-  vest.position.y=0.08
-  add_child(vest)
- if not has_character_model:
-  var head:=MeshInstance3D.new()
-  var sphere:=SphereMesh.new()
-  sphere.radius=0.22
-  sphere.height=0.44
-  head.mesh=sphere
-  head.position.y=0.95
-  var head_mat:=StandardMaterial3D.new()
-  head_mat.albedo_color=Color(0.34,0.27,0.21)
-  head.material_override=head_mat
+  var head := MeshInstance3D.new()
+  var sphere := SphereMesh.new()
+  sphere.radius = 0.22
+  sphere.height = 0.44
+  head.mesh = sphere
+  head.position.y = 0.95
+  var head_mat := StandardMaterial3D.new()
+  head_mat.albedo_color = Color(0.34,0.27,0.21)
+  head.material_override = head_mat
   add_child(head)
+
  var helmet := MeshInstance3D.new()
  var helmet_mesh := SphereMesh.new()
  helmet_mesh.radius = 0.25
@@ -56,14 +62,20 @@ func _ready() -> void:
  helmet_mat.roughness = 0.88
  helmet.material_override = helmet_mat
  add_child(helmet)
+
  var backpack := MeshInstance3D.new()
  var pack_mesh := BoxMesh.new()
  pack_mesh.size = Vector3(0.42,0.55,0.22)
  backpack.mesh = pack_mesh
  backpack.position = Vector3(0,0.14,0.27)
- backpack.material_override = material
+ var pack_mat := StandardMaterial3D.new()
+ pack_mat.albedo_color = Color(0.12,0.16,0.13)
+ pack_mat.roughness = 0.95
+ backpack.material_override = pack_mat
  add_child(backpack)
+
  if not has_character_model:
+  for side in [-1.0,1.0]:
    var shoulder := MeshInstance3D.new()
    var shoulder_mesh := BoxMesh.new()
    shoulder_mesh.size = Vector3(0.24,0.25,0.38)
@@ -88,7 +100,7 @@ func _ready() -> void:
    boot.position = Vector3(side*0.18,-0.82,-0.035)
    boot.material_override = dark_boot_material()
    add_child(boot)
- # بندقية ظاهرة على هيئة الجندي بدل الشكل الأسطواني المجرد.
+
  var rifle := MeshInstance3D.new()
  var rifle_mesh := BoxMesh.new()
  rifle_mesh.size = Vector3(0.10,0.10,0.70)
@@ -99,16 +111,18 @@ func _ready() -> void:
  rifle_mat.metallic = 0.42
  rifle.material_override = rifle_mat
  add_child(rifle)
- var collision:=CollisionShape3D.new()
- var shape:=CapsuleShape3D.new()
- shape.radius=0.42
- shape.height=1.7
- collision.shape=shape
+
+ var collision := CollisionShape3D.new()
+ var shape := CapsuleShape3D.new()
+ shape.radius = 0.42
+ shape.height = 1.7
+ collision.shape = shape
  add_child(collision)
- player=get_tree().get_first_node_in_group("player")
- speed=randf_range(2.8,3.8)
- preferred_distance=randf_range(11.0,17.0)
- strafe_sign=-1.0 if randf()<0.5 else 1.0
+
+ player = get_tree().get_first_node_in_group("player")
+ speed = randf_range(2.8,3.8)
+ preferred_distance = randf_range(11.0,17.0)
+ strafe_sign = -1.0 if randf() < 0.5 else 1.0
 
 func _build_character_model() -> bool:
  var model_path: String = CHARACTER_MODELS[randi_range(0,CHARACTER_MODELS.size()-1)]
