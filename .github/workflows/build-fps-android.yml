@@ -89,7 +89,7 @@ jobs:
       - name: Export Android APK
         run: |
           mkdir -p fps-game/build
-          godot --headless --verbose --path fps-game --export-debug "Android" fps-game/build/VOID-FRONTLINE-debug.apk
+          godot --headless --verbose --path fps-game --export-debug "Android" build/VOID-FRONTLINE-debug.apk
 
       - name: Verify APK
         run: |
