@@ -291,6 +291,11 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                     callback(message.ifBlank { "هذي الخطوة تحتاج تأكيد منك داخل التطبيق؛ ما نفذتها." })
                     return@askGemini
                 }
+                val sensitiveClickWords = listOf("حذف", "حذف نهائي", "نشر", "إرسال", "ارسال", "إلغاء الاشتراك", "شراء", "دفع", "تسجيل الخروج", "delete", "remove", "publish", "post", "send", "purchase", "pay", "log out", "sign out")
+                if (action == "click" && sensitiveClickWords.any { target.contains(it, ignoreCase = true) }) {
+                    callback("وصلت لخطوة حساسة («" + target + "»). ما ضغطتها تلقائياً؛ راجعها وأكّدها بنفسك داخل التطبيق حتى ما يصير حذف أو نشر أو إرسال أو دفع بالغلط.")
+                    return@askGemini
+                }
                 val success = when (action) {
                     "open_app" -> launchAppByLabel(target)
                     "click" -> VoidAccessibilityService.instance?.clickText(target) == true
