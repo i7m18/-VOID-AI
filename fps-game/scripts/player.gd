@@ -331,7 +331,9 @@ func _unhandled_input(event: InputEvent) -> void:
    set_sprinting(event.pressed)
   if not event.pressed: return
   if event.keycode == KEY_ESCAPE:
-   Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+   var root := get_tree().current_scene
+   if is_instance_valid(root) and root.has_method("_toggle_pause_menu"):
+    root._toggle_pause_menu()
   elif event.keycode == KEY_R:
    reload_weapon()
   elif event.keycode == KEY_Q:
