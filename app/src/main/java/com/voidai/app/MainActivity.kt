@@ -126,15 +126,15 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                 var lastBusyMessage = "خدمة Gemini مشغولة حالياً."
                 for (model in models) {
                     var attempt = 0
-                    while (attempt < 3 && !completed) {
+                    while (attempt < if (model == models.first()) 2 else 1 && !completed) {
                         attempt += 1
                         var connection: HttpURLConnection? = null
                         try {
                             val endpoint = URL("https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent?key=" + java.net.URLEncoder.encode(key, "UTF-8"))
                             connection = endpoint.openConnection() as HttpURLConnection
                             connection.requestMethod = "POST"
-                            connection.connectTimeout = 20000
-                            connection.readTimeout = 45000
+                            connection.connectTimeout = 12000
+                            connection.readTimeout = 25000
                             connection.doOutput = true
                             connection.setRequestProperty("Content-Type", "application/json; charset=utf-8")
                             val requestText = if (agentPrompt) question else "أنت VOID AI، مساعد عربي ودود. أجب باللهجة العراقية عند ملاءمتها، ولا تدّع تنفيذ أفعال على الجهاز. سؤال المستخدم: " + question
@@ -158,7 +158,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                                 if (code == 503 || code == 429) {
                                     lastBusyMessage = if (code == 503) "Gemini عليه ضغط مؤقت (503)." else "Gemini وصل حد الطلبات أو الحصة (429)."
                                     if (attempt < 3) {
-                                        Thread.sleep(800L * attempt)
+                                        Thread.sleep(450L * attempt)
                                     } else {
                                         lastBusyMessage += " التفاصيل: " + reason + " — جرّبت إعادة الاتصال تلقائياً، وراح أجرب نموذج احتياطي."
                                         break
@@ -176,7 +176,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                             }
                         } catch (e: Exception) {
                             if (attempt < 3) {
-                                try { Thread.sleep(700L * attempt) } catch (_: InterruptedException) {}
+                                try { Thread.sleep(400L * attempt) } catch (_: InterruptedException) {}
                             } else {
                                 lastBusyMessage = "تعذر الاتصال بـ Gemini بعد عدة محاولات: " + (e.message ?: "تأكد من الإنترنت.")
                                 break
@@ -207,14 +207,27 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     }
 
     private fun launchAppByLabel(name: String): Boolean {
-        val wanted = name.trim().lowercase(Locale.ROOT).replace(" ", "")
-        if (wanted.isBlank()) return false
+        val cleaned = name.trim().lowercase(Locale.ROOT).replace(" ", "")
+        if (cleaned.isBlank()) return false
+        val aliases = mapOf(
+            "capcut" to "com.lemon.lvoverseas",
+            "كابكات" to "com.lemon.lvoverseas",
+            "كابكت" to "com.lemon.lvoverseas",
+            "كابكوت" to "com.lemon.lvoverseas",
+            "يوتيوب" to "com.google.android.youtube",
+            "واتساب" to "com.whatsapp",
+            "تيليجرام" to "org.telegram.messenger"
+        )
+        val directPackage = aliases[cleaned]
+        if (directPackage != null) {
+            val directIntent = packageManager.getLaunchIntentForPackage(directPackage)
+            if (directIntent != null) return try { startActivity(directIntent); true } catch (_: Exception) { false }
+        }
         val match = installedAppLabels().firstOrNull { (label, _) ->
             val candidate = label.lowercase(Locale.ROOT).replace(" ", "")
-            candidate == wanted || candidate.contains(wanted) || (wanted.length > 3 && wanted.contains(candidate) && candidate.length > 3)
+            candidate == cleaned || candidate.contains(cleaned) || (cleaned.length > 3 && cleaned.contains(candidate) && candidate.length > 3)
         } ?: return false
         val intent = packageManager.getLaunchIntentForPackage(match.second) ?: return false
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         return try { startActivity(intent); true } catch (_: Exception) { false }
     }
 
@@ -222,15 +235,15 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         val history = mutableListOf<String>()
         val handler = Handler(Looper.getMainLooper())
         fun step(index: Int) {
-            if (index >= 14) {
+            if (index >= 8) {
                 callback("وصلت حد خطوات التنفيذ الآمنة. اللي تم لحد الآن: " +
                     if (history.isEmpty()) "ما نفّذت خطوة." else history.takeLast(5).joinToString("، ") +
                     ". گدر تكلي أكمل من الشاشة الحالية.")
                 return
             }
             val service = VoidAccessibilityService.instance
-            val screen = service?.visibleText() ?: "خدمة التحكم بالشاشة غير مفعلة. يمكن فتح تطبيق فقط، لكن قراءة الشاشة والنقر والكتابة تحتاج تفعيل خدمة VOID AI من تسهيلات الاستخدام."
-            val apps = installedAppLabels().joinToString(", ") { it.first }.take(4500)
+            val screen = (service?.visibleText() ?: "خدمة التحكم بالشاشة غير مفعلة. يمكن فتح تطبيق فقط، لكن قراءة الشاشة والنقر والكتابة تحتاج تفعيل خدمة VOID AI من تسهيلات الاستخدام.").take(2600)
+            val apps = installedAppLabels().joinToString(", ") { it.first }.take(1400)
             val prompt = listOf(
                 "أنت وكيل تحكم محلي داخل VOID AI على أندرويد. المطلوب من المستخدم: " + goal,
                 "الخطوات المنفذة سابقاً: " + history.joinToString(" | ").ifBlank { "لا توجد" },
@@ -290,14 +303,14 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                     return@askGemini
                 }
                 history.add(action + if (target.isNotBlank()) "(" + target + ")" else if (textValue.isNotBlank()) "(نص)" else "")
-                handler.postDelayed({ step(index + 1) }, if (action == "wait") 1300L else 900L)
+                handler.postDelayed({ step(index + 1) }, if (action == "wait") 700L else 450L)
             }, speakAnswer = false, agentPrompt = true)
         }
         if (getSharedPreferences("void_ai", MODE_PRIVATE).getString("gemini_api_key", "").isNullOrBlank()) {
             callback("اربط Gemini API أولاً من زر «ربط AI» حتى أقدر أخطط للخطوات.")
             return
         }
-        step(0)
+        handler.postDelayed({ step(0) }, 1400L)
     }
 
     private fun runCommand(raw: String): String {
@@ -390,13 +403,21 @@ private fun VoidAiApp(
         messages = messages + ChatLine(text, true)
         input = ""
         testStatus = "جاري تنفيذ الأمر..."
-        val response = onCommand(text)
-        if (response.startsWith("أكدر أنفذ أوامر مباشرة")) {
+        val normalized = text.lowercase(Locale.ROOT)
+        val isDesignTask = listOf("صمم", "صمّم", "سوي فيديو", "سوّي فيديو", "سويلي فيديو", "مونتاج", "منتاج", "عدّل فيديو", "عدل فيديو", "ركب فيديو").any { normalized.contains(it) }
+        val response = if (isDesignTask) onCommand("افتح CapCut") else onCommand(text)
+        if (response.startsWith("أكدر أنفذ أوامر مباشرة") || isDesignTask) {
             thinking = true
+            testStatus = if (isDesignTask) "أفتح CapCut وأبدأ خطوات التصميم..." else "جاري تنفيذ الأمر..."
+            if (isDesignTask && !response.startsWith("فتحت")) {
+                messages = messages + ChatLine("ما قدرت أفتح CapCut تلقائياً: " + response + " تأكد أنه مثبت على الجهاز.", false)
+                thinking = false
+                return
+            }
             onRunAgent(text) { aiResponse ->
                 messages = messages + ChatLine(aiResponse, false)
                 thinking = false
-                testStatus = "اكتملت محاولة التنفيذ"
+                testStatus = "انتهت محاولة التنفيذ"
                 onSpeak(aiResponse)
             }
         } else {
