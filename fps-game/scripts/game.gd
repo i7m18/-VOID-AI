@@ -918,6 +918,10 @@ func _build_touch_controls() -> void:
  crouch.custom_minimum_size = Vector2(140,44)
  controls.add_child(crouch)
  crouch.pressed.connect(func(): if is_instance_valid(player): player.toggle_crouch())
+ var pause := _make_button("Ⅱ",Callable(self,"_toggle_pause_menu"),42)
+ pause.position = Vector2(w-72,18)
+ pause.custom_minimum_size = Vector2(54,42)
+ controls.add_child(pause)
  var car := _make_button("ركوب / نزول",Callable(player,"toggle_vehicle"),45)
  car.position = Vector2(w-335,h-55)
  car.custom_minimum_size = Vector2(160,45)
@@ -1014,6 +1018,37 @@ func _show_completion_menu() -> void:
   col.add_child(_label("انتهت الحملة. أخرجت فريقك وكشفت مصدر الإشارة.",18))
   col.add_child(_make_button("إعادة الحملة",Callable(self,"_start_campaign"),58))
  col.add_child(_make_button("القائمة الرئيسية",Callable(self,"_show_main_menu")))
+
+func _toggle_pause_menu() -> void:
+ if not game_active: return
+ game_active = false
+ Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+ if is_instance_valid(menu_panel): menu_panel.queue_free()
+ menu_panel = PanelContainer.new()
+ menu_panel.anchor_left = 0.5
+ menu_panel.anchor_right = 0.5
+ menu_panel.anchor_top = 0.5
+ menu_panel.anchor_bottom = 0.5
+ menu_panel.offset_left = -205
+ menu_panel.offset_right = 205
+ menu_panel.offset_top = -170
+ menu_panel.offset_bottom = 170
+ menu_panel.add_theme_stylebox_override("panel",_panel_style())
+ hud_layer.add_child(menu_panel)
+ var col := VBoxContainer.new()
+ col.add_theme_constant_override("separation",10)
+ menu_panel.add_child(col)
+ var heading := _label("إيقاف مؤقت",28,Color(0.92,0.75,0.37))
+ heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+ col.add_child(heading)
+ col.add_child(_label("المهمة متوقفة مؤقتاً",17))
+ col.add_child(_make_button("متابعة القتال",Callable(self,"_resume_game"),54))
+ col.add_child(_make_button("إعادة المهمة",Callable(self,"_restart_mission"),48))
+ col.add_child(_make_button("القائمة الرئيسية",Callable(self,"_show_main_menu"),48))
+
+func _resume_game() -> void:
+ if is_instance_valid(menu_panel): menu_panel.queue_free()
+ game_active = true
 
 func _next_mission() -> void:
  mission_index += 1
