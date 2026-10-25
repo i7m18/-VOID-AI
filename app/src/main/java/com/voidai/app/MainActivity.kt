@@ -126,7 +126,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         if (key.isBlank()) { callback("اضغط ربط AI وأضف مفتاح Gemini API أولاً."); return }
         Thread {
             val answer = try {
-                val models = listOf("gemini-2.5-flash", "gemini-2.0-flash")
+                val models = listOf("gemini-3.8-flash")
                 var finalAnswer = ""
                 var completed = false
                 var lastBusyMessage = "خدمة Gemini مشغولة حالياً."
