@@ -84,6 +84,19 @@ jobs:
           test -s fps-game/assets/weapons/compact_smg.glb
           test -s fps-game/assets/weapons/sniper_rifle.glb
 
+      - name: Download CC0 soldier models and combat sound effects
+        shell: bash
+        run: |
+          mkdir -p fps-game/assets/characters fps-game/assets/audio
+          for model in character-male-a character-male-b character-male-c; do
+            curl -L --fail --retry 3 "https://raw.githubusercontent.com/Hidencod/tge-assets/main/packs/mini-characters/${model}.glb" -o "fps-game/assets/characters/${model}.glb"
+            test -s "fps-game/assets/characters/${model}.glb"
+          done
+          curl -L --fail --retry 3 'https://raw.githubusercontent.com/petroulacl/fps-asset-kit/main/sfx/gunshots/game_gunshot.wav' -o fps-game/assets/audio/rifle_shot.wav
+          curl -L --fail --retry 3 'https://raw.githubusercontent.com/petroulacl/fps-asset-kit/main/sfx/gunshots/sniper_shot.wav' -o fps-game/assets/audio/sniper_shot.wav
+          test -s fps-game/assets/audio/rifle_shot.wav
+          test -s fps-game/assets/audio/sniper_shot.wav
+
       - name: Configure Android debug signing and Godot SDK paths
         shell: bash
         run: |
