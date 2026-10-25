@@ -16,6 +16,8 @@ const MISSIONS := [
 var world_root: Node3D
 var player: CharacterBody3D
 var vehicle: Node3D
+var objective_marker: Node3D
+var objective_completed := false
 var enemies_left := 0
 var mission_index := 0
 var game_active := false
@@ -165,6 +167,7 @@ func _start_campaign() -> void:
 func _start_mission() -> void:
  game_active = false
  mission_won = false
+ objective_completed = false
  move_state = Vector2.ZERO
  fire_held = false
  message_label.text = ""
@@ -174,9 +177,11 @@ func _start_mission() -> void:
   if child.name == "TouchControls": child.queue_free()
  player = null
  vehicle = null
+ objective_marker = null
  _build_world()
  _spawn_player()
  _spawn_vehicle()
+ _spawn_objective()
  _spawn_enemies()
  _build_touch_controls()
  story_label.text = ""
@@ -271,6 +276,8 @@ func _build_world() -> void:
   var x := randf_range(-52,52)
   var z := randf_range(-52,52)
   if absf(x)<12 and z>0 and z<20: x += 18
+  var target_position := _objective_position()
+  if absf(x-target_position.x)<5.5 and absf(z-target_position.z)<6.0: x += 15.0
   block.position = Vector3(x,size.y/2,z)
   world_root.add_child(block)
  _add_structure(Vector3(0,2,-48),Vector3(18,4,2),Color(0.16,0.20,0.19))
@@ -330,6 +337,78 @@ func _spawn_vehicle() -> void:
  vehicle.add_child(cabin)
  world_root.add_child(vehicle)
 
+func _objective_position() -> Vector3:
+ match mission_index:
+  0: return Vector3(0,0,-24)
+  1: return Vector3(20,0,-24)
+  2: return Vector3(-23,0,-18)
+  3: return Vector3(0,0,-13)
+  4: return Vector3(18,0,-35)
+  5: return Vector3(-19,0,-12)
+  6: return Vector3(22,0,-28)
+  7: return Vector3(0,0,-35)
+  _: return Vector3(-20,0,-32)
+
+func _spawn_objective() -> void:
+ objective_marker = Node3D.new()
+ objective_marker.name = "MissionObjective"
+ objective_marker.position = _objective_position()
+ var base_mesh := MeshInstance3D.new()
+ var base_shape := CylinderMesh.new()
+ base_shape.top_radius = 0.95
+ base_shape.bottom_radius = 1.15
+ base_shape.height = 0.12
+ base_mesh.mesh = base_shape
+ var base_material := StandardMaterial3D.new()
+ base_material.albedo_color = Color(0.10,0.16,0.14)
+ base_material.metallic = 0.65
+ base_material.roughness = 0.32
+ base_mesh.material_override = base_material
+ base_mesh.position.y = 0.06
+ objective_marker.add_child(base_mesh)
+ var beacon := MeshInstance3D.new()
+ var beam_shape := CylinderMesh.new()
+ beam_shape.top_radius = 0.12
+ beam_shape.bottom_radius = 0.24
+ beam_shape.height = 2.1
+ beacon.mesh = beam_shape
+ beacon.position.y = 1.12
+ var beam_material := StandardMaterial3D.new()
+ beam_material.albedo_color = Color(0.15,0.85,0.54)
+ beam_material.emission_enabled = true
+ beam_material.emission = Color(0.04,0.95,0.48)
+ beam_material.emission_energy_multiplier = 2.0
+ beam_material.metallic = 0.2
+ beacon.material_override = beam_material
+ objective_marker.add_child(beacon)
+ var light := OmniLight3D.new()
+ light.position.y = 1.7
+ light.light_color = Color(0.12,1.0,0.58)
+ light.light_energy = 1.8
+ light.omni_range = 7.0
+ objective_marker.add_child(light)
+ var label := _label("الهدف",16,Color(0.55,1.0,0.77))
+ label.position = Vector2(-55,-70)
+ label.size = Vector2(110,28)
+ label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+ label.rotation = 0
+ var label_pivot := Sprite3D.new()
+ label_pivot.name = "ObjectiveMarkerBillboard"
+ label_pivot.position.y = 2.6
+ var text_mesh := TextMesh.new()
+ text_mesh.text = "الهدف"
+ text_mesh.font_size = 48
+ text_mesh.depth = 0.01
+ var text_node := MeshInstance3D.new()
+ text_node.mesh = text_mesh
+ var text_material := StandardMaterial3D.new()
+ text_material.albedo_color = Color(0.6,1.0,0.78)
+ text_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+ text_node.material_override = text_material
+ text_node.position.y = 2.7
+ objective_marker.add_child(text_node)
+ world_root.add_child(objective_marker)
+
 func _spawn_enemies() -> void:
  enemies_left = int(MISSIONS[mission_index]["enemies"])
  for i in range(enemies_left):
@@ -385,6 +464,10 @@ func _build_touch_controls() -> void:
  switch.position = Vector2(w-335,h-105)
  switch.custom_minimum_size = Vector2(160,45)
  controls.add_child(switch)
+ var interact := _make_button("تفاعل",Callable(self,"interact_objective"),45)
+ interact.position = Vector2(w-335,h-155)
+ interact.custom_minimum_size = Vector2(160,45)
+ controls.add_child(interact)
  var car := _make_button("ركوب / نزول",Callable(player,"toggle_vehicle"),45)
  car.position = Vector2(w-335,h-55)
  car.custom_minimum_size = Vector2(160,45)
@@ -432,11 +515,25 @@ func _restart_mission() -> void:
 func enemy_down() -> void:
  enemies_left = maxi(0,enemies_left-1)
  _update_hud()
- if enemies_left==0 and not mission_won:
-  mission_won = true
-  game_active = false
-  message_label.text = "تم إنجاز المهمة"
-  _show_completion_menu()
+ if enemies_left == 0 and not objective_completed:
+  message_label.text = "المنطقة آمنة — توجّه إلى العلامة المضيئة واضغط «تفاعل»"
+  objective_label.text = "الهدف: اقترب من العلامة المضيئة وفعّلها"
+
+func interact_objective() -> void:
+ if not game_active or objective_completed or not is_instance_valid(player) or not is_instance_valid(objective_marker):
+  return
+ if enemies_left > 0:
+  message_label.text = "أمّن المنطقة أولاً — الأعداء المتبقون: %d" % enemies_left
+  return
+ if player.global_position.distance_to(objective_marker.global_position) > 4.5:
+  message_label.text = "اقترب من العلامة الخضراء لتفعيل الهدف"
+  return
+ objective_completed = true
+ mission_won = true
+ game_active = false
+ objective_marker.visible = false
+ message_label.text = "تم إنجاز المهمة"
+ _show_completion_menu()
 
 func _show_completion_menu() -> void:
  if is_instance_valid(menu_panel): menu_panel.queue_free()
@@ -493,5 +590,10 @@ func _update_hud() -> void:
  if not is_instance_valid(player): return
  var mission: Dictionary = MISSIONS[mission_index]
  title_label.text = mission["title"]
- objective_label.text = "الهدف: "+str(mission["objective"])
+ if objective_completed:
+  objective_label.text = "الهدف مكتمل"
+ elif enemies_left > 0:
+  objective_label.text = "الهدف: "+str(mission["objective"])+" • أمّن المنطقة"
+ else:
+  objective_label.text = "الهدف: اقترب من العلامة واضغط «تفاعل»"
  status_label.text = "الصحة %d | الذخيرة %d | الأعداء %d | %s" % [player.health,player.get_current_ammo(),enemies_left,player.get_weapon_name()]
