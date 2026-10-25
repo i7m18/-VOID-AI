@@ -110,6 +110,10 @@ func _unhandled_input(event: InputEvent) -> void:
    switch_weapon()
   elif event.keycode==KEY_E:
    toggle_vehicle()
+  elif event.keycode==KEY_F:
+   var root = get_tree().current_scene
+   if is_instance_valid(root) and root.has_method("interact_objective"):
+    root.interact_objective()
   elif event.keycode==KEY_1:
    _set_weapon(0)
   elif event.keycode==KEY_2:
