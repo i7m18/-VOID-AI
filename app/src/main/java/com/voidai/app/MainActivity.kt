@@ -789,7 +789,7 @@ private fun VoidAiApp(
     var thinking by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
     var testStatus by remember { mutableStateOf("جاهز لاستقبال أوامرك") }
-    var messages by remember { mutableStateOf(listOf(ChatLine("أهلاً، أني VOID AI. احچيلي شتريد أسوي أو اكتب الأمر. للسيطرة على عناصر التطبيقات فعّل خدمة التحكم من الإعدادات.", false))) }
+    var messages by remember { mutableStateOf(listOf(ChatLine("أهلاً، أني VOID AI. احچيلي شتريد أسوي أو اكتب الأمر. فعّل خدمة التحكم لتنفيذ المهام، واكتب «تذكّر أن ...» حتى أحفظ معلومة محلياً.", false))) }
 
     fun submit(text: String) {
         if (text.isBlank() || thinking) return
@@ -932,18 +932,20 @@ private fun VoidAiApp(
                     Button(
                         onClick = {
                             if (!hasAiConnection()) {
-                                messages = messages + ChatLine("اربط مفتاح Gemini من زر ربط AI أولاً.", false)
-                                backendUrlInput = ""
+                                messages = messages + ChatLine("اربط خادم VOID AI من زر «ربط AI» أولاً. ما تحتاج مفتاح Gemini داخل التطبيق.", false)
+                                val currentBackend = onLoadBackend()
+                                backendUrlInput = currentBackend.first
+                                backendTokenInput = currentBackend.second
                                 backendDialog = true
                             } else {
                                 thinking = true
-                                testStatus = "أختبر اتصال Gemini..."
+                                testStatus = "أختبر اتصال خادم VOID AI..."
                                 onAskAI("أجب بكلمة تم فقط. هذا اختبار اتصال Gemini داخل تطبيق VOID AI.") { answer ->
                                     val failed = listOf("Gemini رفض", "تعذر الاتصال", "مفتاح Gemini", "رمز وصول الخادم", "رفضت جهة المصادقة", "خادم VOID AI", "المفتاح أو مشروع", "نموذج Gemini", "تم تجاوز حصة", "طلب Gemini", "اربط Gemini", "HTTP 503", "HTTP 429", "عليه ضغط", "وصل حد الطلبات").any { answer.contains(it, ignoreCase = true) }
-                                    val line = if (failed) "فشل اختبار Gemini: " + answer else "نجح الاتصال بـ Gemini. الرد: " + answer
+                                    val line = if (failed) "فشل اختبار VOID AI: " + answer else "نجح الاتصال بخادم VOID AI. الرد: " + answer
                                     messages = messages + ChatLine(line, false)
                                     thinking = false
-                                    testStatus = if (failed) "الاتصال يحتاج مراجعة" else "اتصال Gemini شغّال"
+                                    testStatus = if (failed) "الاتصال يحتاج مراجعة" else "اتصال VOID AI شغّال"
                                 }
                             }
                         },
