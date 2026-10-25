@@ -351,7 +351,7 @@ void fragment() {
  _add_structure(Vector3(10,2,-40),Vector3(2,4,18),Color(0.16,0.20,0.19))
  var sun := DirectionalLight3D.new()
  sun.rotation_degrees = Vector3(-55,-25,0)
-sun.light_energy = 1.25
+ sun.light_energy = 1.25
  sun.light_color = Color(1.0,0.78,0.58)
  sun.shadow_enabled = true
  world_root.add_child(sun)
@@ -383,7 +383,6 @@ func _add_building(pos: Vector3, size: Vector3, color: Color) -> void:
     if model_bounds.size.x > 0.01 and model_bounds.size.y > 0.01 and model_bounds.size.z > 0.01:
      model.scale = Vector3(size.x/model_bounds.size.x,size.y/model_bounds.size.y,size.z/model_bounds.size.z)
      model.position = pos - Vector3(model_bounds.position.x*model.scale.x,model_bounds.position.y*model.scale.y,model_bounds.position.z*model.scale.z)
-     model.rotation.y = deg_to_rad(float((city_asset_index * 73) % 360))
      return
    model.queue_free()
 
