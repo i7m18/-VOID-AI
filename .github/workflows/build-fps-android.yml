@@ -109,7 +109,16 @@ jobs:
                   t = i / RATE
                   noise = random.uniform(-1.0, 1.0)
                   noise_state = noise_state * 0.20 + noise * 0.80
-                  if mode == "sniper":
+                  if mode == "footstep":
+                      body = 0.42 * math.sin(2 * math.pi * 72 * t) * math.exp(-t*34.0)
+                      report = 0.45 * noise_state * math.exp(-t*42.0)
+                      value = body + report
+                  elif mode == "reload":
+                      click_a = 0.55 * math.exp(-((t - 0.025) / 0.004) ** 2)
+                      click_b = 0.43 * math.exp(-((t - 0.092) / 0.006) ** 2)
+                      scrape = 0.16 * noise_state * math.exp(-t*10.0)
+                      value = click_a + click_b + scrape
+                  elif mode == "sniper":
                       crack = 0.95 * math.exp(-((t - 0.004) / 0.0022) ** 2)
                       body = 0.72 * math.sin(2 * math.pi * 54 * t) * math.exp(-t * 7.5)
                       report = 0.52 * noise_state * math.exp(-t * 16.0)
@@ -146,11 +155,15 @@ jobs:
           write_sound("rifle_shot.wav", 0.22, "rifle")
           write_sound("sniper_shot.wav", 0.52, "sniper")
           write_sound("explosion.wav", 0.82, "explosion")
+          write_sound("footstep_sand.wav", 0.12, "footstep")
+          write_sound("reload.wav", 0.18, "reload")
           PY
           file fps-game/assets/audio/*.wav
           test -s fps-game/assets/audio/rifle_shot.wav
           test -s fps-game/assets/audio/sniper_shot.wav
           test -s fps-game/assets/audio/explosion.wav
+          test -s fps-game/assets/audio/footstep_sand.wav
+          test -s fps-game/assets/audio/reload.wav
 
       - name: Configure Android debug signing and Godot SDK paths
         shell: bash
