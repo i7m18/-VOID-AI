@@ -1,24 +1,27 @@
-# VOID FRONTLINE — FPS Prototype
+# VOID FRONTLINE — جبهة الظل
 
-A Godot 4 starter for an Android-oriented first-person military shooter. This is a playable prototype built from primitive 3D geometry; it is not a finished photorealistic game.
+مشروع لعبة تصويب ثلاثية الأبعاد بمنظور الشخص الأول، مبني باستخدام Godot 4 ومصمم ليستهدف Android. هذا إصدار تطويري مبكر برسوم مولّدة داخل اللعبة، وليس لعبة تجارية مكتملة أو واقعية فوتوغرافياً بعد.
 
-## Run
-1. Install Godot 4.3 or newer.
-2. Import `project.godot`.
-3. Press F6/F5 to run `scenes/main.tscn`.
+## الموجود في هذا الفرع
+- واجهة وقوائم وأهداف وقصة باللغة العربية.
+- حملة من خمسة فصول متتابعة مع تقدم بين المهمات.
+- تحكم لوحة مفاتيح وفأرة، وأزرار لمس للحركة والإطلاق والتلقيم وتبديل السلاح.
+- ثلاثة أنواع أسلحة افتراضية، ذخيرة ومخازن منفصلة، صحة وإعادة محاولة.
+- أعداء يلاحقون اللاعب ويهاجمونه حسب المسافة.
+- مركبة مدرعة مبسطة يمكن ركوبها قربها والتحرك بسرعة أكبر.
+- ساحة ثلاثية الأبعاد وحواجز يتم توليدها إجرائياً.
 
-## Prototype features
-- First-person camera and mouse look (desktop prototype controls)
-- Move, jump, hitscan rifle, ammo and reload
-- Enemies chase the player and deal contact damage
-- Health/ammo/mission HUD
-- Mission completion when enemies are cleared
+## تشغيل المشروع
+1. نزّل مجلد fps-game أو المستودع كاملاً.
+2. افتح project.godot باستخدام Godot 4.3 أو أحدث.
+3. شغّل المشروع لتظهر القائمة العربية.
 
-## Controls
-WASD move, mouse look, left mouse fire, R reload, Space jump, Esc release mouse.
+## التحكم
+- الكمبيوتر: WASD للحركة، الفأرة للتصويب، زر الفأرة الأيسر للإطلاق، R للتلقيم، Q لتبديل السلاح، E للدخول والخروج من المركبة، 1/2/3 لاختيار السلاح.
+- Android: استخدم أزرار الشاشة. اسحب النصف الأيمن من الشاشة لتغيير اتجاه النظر. زر المركبة يعمل عندما تكون قريباً منها.
 
-## Android
-This is a source project, not an APK yet. To export Android, install Godot export templates and Android build prerequisites, then configure an Android export preset. Mobile touch controls and device performance testing are still required before calling it Android-ready.
+## ملف APK
+يوجد إعداد لتصدير Android وسير عمل GitHub Actions لبناء نسخة Debug ونشرها كـ Artifact عند نجاح البناء. افتح تبويب Actions في GitHub وتابع workflow باسم Build Android APK. لا تعتبر رابط APK صالحاً إلا إذا انتهى التشغيل بحالة نجاح وظهر Artifact.
 
-## Planned next
-Touch joystick/buttons, proper animated weapon models, navigation-based enemy AI, vehicle controller, authored levels, sound, optimized assets, save/checkpoint system.
+## ما لم يكتمل بعد
+هذه النسخة لا تحتوي على نماذج شخصيات أو أسلحة عالية التفاصيل، أو حركات أنيميشن احترافية، أو أصوات مرخصة، أو خرائط مصممة يدوياً، أو ذكاء اصطناعي متقدم فعلياً، أو اختبارات أداء على أجهزة متعددة. المركبة مبسطة وتحتاج اللعبة إلى اختبار عملي قبل وصفها بأنها جاهزة للعب على كل هاتف.
